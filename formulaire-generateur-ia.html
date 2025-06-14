@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎨 Générateur d'Images Multi-IA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+            font-size: 14px;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e1e1;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .success {
+            background: #4caf50;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .success.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        
+        .error.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+        
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .feature {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Générateur d'Images Multi-IA</h1>
+        <p class="subtitle">Comparez les résultats de plusieurs IA en un clic</p>
+        
+        <div class="info">
+            ✨ Votre prompt sera envoyé à DALL-E 3, Stable Diffusion XL et Midjourney
+        </div>
+        
+        <form id="imageForm">
+            <div class="form-group">
+                <label for="email">📧 Votre email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    required 
+                    placeholder="votre@email.com"
+                    autocomplete="email"
+                >
+            </div>
+            
+            <div class="form-group">
+                <label for="prompt">🖼️ Décrivez votre image</label>
+                <textarea 
+                    id="prompt" 
+                    name="prompt" 
+                    required 
+                    placeholder="Ex: Un chat astronaute sur la lune en style cartoon..."
+                ></textarea>
+            </div>
+            
+            <div class="features">
+                <span class="feature">🚀 3 IA</span>
+                <span class="feature">⚡ 2-3 min</span>
+                <span class="feature">📊 Comparaison</span>
+            </div>
+            
+            <button type="submit" id="submitBtn">
+                🚀 Générer les images
+            </button>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>🎨 Génération en cours...</p>
+            <p style="font-size: 14px; color: #666; margin-top: 10px;">
+                Cela peut prendre 2-3 minutes
+            </p>
+        </div>
+        
+        <div class="success" id="success">
+            ✅ Demande envoyée avec succès !<br>
+            Vous recevrez les images par email dans quelques minutes.
+        </div>
+        
+        <div class="error" id="error">
+            ❌ Une erreur s'est produite. Veuillez réessayer.
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('imageForm');
+        const loading = document.getElementById('loading');
+        const success = document.getElementById('success');
+        const error = document.getElementById('error');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // URL de votre webhook n8n - IMPORTANT: Remplacez par votre URL
+        const WEBHOOK_URL = 'https://danytherrien.app.n8n.cloud/webhook/generate-images';
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Réinitialiser les messages
+            success.classList.remove('show');
+            error.classList.remove('show');
+            
+            // Afficher le chargement
+            loading.classList.add('show');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Envoi en cours...';
+            
+            // Récupérer les données du formulaire
+            const formData = {
+                email: document.getElementById('email').value,
+                prompt: document.getElementById('prompt').value
+            };
+            
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    // Succès
+                    loading.classList.remove('show');
+                    success.classList.add('show');
+                    form.reset();
+                    
+                    // Réinitialiser le bouton après 5 secondes
+                    setTimeout(() => {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = '🚀 Générer les images';
+                        success.classList.remove('show');
+                    }, 5000);
+                } else {
+                    throw new Error('Erreur serveur');
+                }
+            } catch (err) {
+                // Erreur
+                console.error('Erreur:', err);
+                loading.classList.remove('show');
+                error.classList.add('show');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Générer les images';
+                
+                // Masquer l'erreur après 5 secondes
+                setTimeout(() => {
+                    error.classList.remove('show');
+                }, 5000);
+            }
+        });
+    </script>
+</body>
+</html>
