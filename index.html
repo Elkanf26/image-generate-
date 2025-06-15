@@ -299,7 +299,7 @@
                     body: JSON.stringify(formData)
                 });
                 
-                if (response.ok) {
+               if (response.ok) {
                     const data = await response.json();
                     
                     // Si on reçoit une URL de redirection, rediriger
@@ -322,10 +322,15 @@
                 } else {
                     throw new Error('Erreur serveur');
                 }
+
+            } catch (error) {
+                // Erreur
+                console.error('Erreur:', error);
+                loading.classList.remove('show');
                 error.classList.add('show');
                 submitBtn.disabled = false;
-                submitBtn.textContent = '🚀 Générer les images';
-                
+                submitBtn.textContent = '🎯 Générer les images';
+
                 // Masquer l'erreur après 5 secondes
                 setTimeout(() => {
                     error.classList.remove('show');
