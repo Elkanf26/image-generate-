@@ -8,13 +8,6 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React via CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel pour transformer JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     
@@ -25,563 +18,492 @@
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 2;
         }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .hidden { display: none !important; }
+        .group:hover .group-hover\\:opacity-100 { opacity: 1; }
+        .group:hover .group-hover\\:bg-opacity-30 { background-color: rgba(0, 0, 0, 0.3); }
     </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-gray-50">
+    <!-- Auth Page -->
+    <div id="auth-page" class="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-800 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <div class="text-center mb-8">
+                <div class="bg-gradient-to-r from-purple-600 to-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="sparkles" class="text-white w-8 h-8"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">AI Image Generator</h1>
+                <p class="text-gray-600">Comparez DALL-E, Stable Diffusion et Midjourney</p>
+            </div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        const { User, MessageSquare, History, LogOut, Eye, Download, Copy, Loader2, Sparkles, Image } = lucide;
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input type="email" id="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="votre@email.com" required>
+                </div>
 
-        // Configuration Firebase - VRAIE CONFIG
-        const firebaseConfig = {
-            apiKey: "AIzaSyCVcwNNPBM7YXZZv2tz2_5BdJUVZZZM8Bk",
-            authDomain: "image-generator-ai-bb1a1.firebaseapp.com",
-            projectId: "image-generator-ai-bb1a1",
-            storageBucket: "image-generator-ai-bb1a1.firebasestorage.app",
-            messagingSenderId: "447983340409",
-            appId: "1:447983340409:web:21d20efb07ee9f17d43da8"
-        };
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                    <input type="password" id="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="••••••••" required>
+                </div>
 
-        // URL de votre webhook n8n 
+                <div id="auth-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"></div>
+
+                <button id="auth-btn" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-4 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center">
+                    <span id="auth-text">Se connecter</span>
+                    <i id="auth-loader" data-lucide="loader-2" class="hidden animate-spin ml-2 w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button id="toggle-auth" class="text-purple-600 hover:text-purple-800 font-medium">
+                    Créer un compte
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="main-app" class="hidden min-h-screen bg-gray-50 flex">
+        <!-- Sidebar -->
+        <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
+            <!-- Header -->
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 w-10 h-10 rounded-full flex items-center justify-center">
+                        <i data-lucide="sparkles" class="text-white w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-gray-800">AI Generator</h1>
+                        <p id="user-email" class="text-sm text-gray-600"></p>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="nav-generate" class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors bg-purple-100 text-purple-700">
+                        <i data-lucide="message-square" class="inline w-4 h-4 mr-2"></i>
+                        Générer
+                    </button>
+                    <button id="nav-history" class="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100">
+                        <i data-lucide="history" class="inline w-4 h-4 mr-2"></i>
+                        Historique
+                    </button>
+                </div>
+            </div>
+
+            <!-- History List -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">Générations récentes</h3>
+                <div id="sidebar-history" class="space-y-2">
+                    <!-- History items will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-200">
+                <button id="logout-btn" class="w-full flex items-center justify-center gap-2 py-2 px-4 text-gray-600 hover:text-gray-800 transition-colors">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    Se déconnecter
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Generate View -->
+            <div id="generate-view" class="flex-1 flex flex-col">
+                <div class="flex-1 flex items-center justify-center p-8">
+                    <div class="max-w-4xl w-full">
+                        <div class="text-center mb-8">
+                            <h2 class="text-3xl font-bold text-gray-800 mb-4">Générez des images avec 3 IA</h2>
+                            <p class="text-gray-600">Comparez DALL-E 3, Stable Diffusion XL et Midjourney en un clic</p>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow-lg p-8">
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-3">Décrivez l'image que vous voulez générer</label>
+                                <textarea id="prompt-input" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none" rows="4" placeholder="Ex: Un chat astronaute sur la lune en style cartoon, très détaillé, couleurs vives..."></textarea>
+                            </div>
+
+                            <button id="generate-btn" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center text-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i id="generate-icon" data-lucide="sparkles" class="mr-3 w-6 h-6"></i>
+                                <span id="generate-text">Générer avec 3 IA</span>
+                            </button>
+
+                            <div id="generate-error" class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"></div>
+
+                            <div id="generate-progress" class="hidden mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div class="flex items-center gap-3 text-blue-700">
+                                    <i data-lucide="loader-2" class="animate-spin w-5 h-5"></i>
+                                    <span class="font-medium">Génération en cours...</span>
+                                </div>
+                                <p class="text-blue-600 text-sm mt-2">DALL-E 3, Stable Diffusion XL et Midjourney travaillent sur votre prompt</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="history-view" class="hidden flex-1 p-8">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">Historique des générations</h2>
+                    <p class="text-gray-600">Toutes vos créations AI en un coup d'œil</p>
+                </div>
+
+                <div id="history-content" class="space-y-8">
+                    <!-- History items will be inserted here -->
+                </div>
+
+                <div id="empty-history" class="hidden text-center py-16">
+                    <i data-lucide="image" class="w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+                    <h3 class="text-xl font-medium text-gray-500 mb-2">Aucune génération</h3>
+                    <p class="text-gray-400 mb-6">Commencez par générer votre première image</p>
+                    <button id="start-generate" class="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium">
+                        Générer une image
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="relative max-w-4xl max-h-full">
+            <img id="modal-image" class="max-w-full max-h-full object-contain rounded-lg">
+            <button id="close-modal" class="absolute top-4 right-4 bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-colors">✕</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
         const N8N_WEBHOOK_URL = "https://danytherrien.app.n8n.cloud/webhook/generate-images";
+        
+        // State
+        let currentUser = null;
+        let authMode = 'login';
+        let currentView = 'generate';
+        let generationHistory = [];
 
-        // Simulation améliorée Firebase Auth & Firestore
-        const mockAuth = {
-            currentUser: null,
-            signInWithEmailAndPassword: async (email, password) => {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                if (email && password) {
-                    mockAuth.currentUser = { email, uid: email.replace('@', '_').replace('.', '_') };
-                    return { user: mockAuth.currentUser };
-                }
-                throw new Error('Email ou mot de passe incorrect');
-            },
-            createUserWithEmailAndPassword: async (email, password) => {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                if (email && password && password.length >= 6) {
-                    mockAuth.currentUser = { email, uid: email.replace('@', '_').replace('.', '_') };
-                    return { user: mockAuth.currentUser };
-                }
-                throw new Error('Le mot de passe doit contenir au moins 6 caractères');
-            },
-            signOut: async () => {
-                mockAuth.currentUser = null;
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // DOM Elements
+        const authPage = document.getElementById('auth-page');
+        const mainApp = document.getElementById('main-app');
+        const authBtn = document.getElementById('auth-btn');
+        const authText = document.getElementById('auth-text');
+        const authLoader = document.getElementById('auth-loader');
+        const authError = document.getElementById('auth-error');
+        const toggleAuth = document.getElementById('toggle-auth');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const userEmailSpan = document.getElementById('user-email');
+        const generateView = document.getElementById('generate-view');
+        const historyView = document.getElementById('history-view');
+        const navGenerate = document.getElementById('nav-generate');
+        const navHistory = document.getElementById('nav-history');
+        const promptInput = document.getElementById('prompt-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const generateIcon = document.getElementById('generate-icon');
+        const generateText = document.getElementById('generate-text');
+        const generateError = document.getElementById('generate-error');
+        const generateProgress = document.getElementById('generate-progress');
+        const historyContent = document.getElementById('history-content');
+        const emptyHistory = document.getElementById('empty-history');
+        const sidebarHistory = document.getElementById('sidebar-history');
+        const imageModal = document.getElementById('image-modal');
+        const modalImage = document.getElementById('modal-image');
+        const closeModal = document.getElementById('close-modal');
+        const logoutBtn = document.getElementById('logout-btn');
+        const startGenerate = document.getElementById('start-generate');
+
+        // Event Listeners
+        authBtn.addEventListener('click', handleAuth);
+        toggleAuth.addEventListener('click', toggleAuthMode);
+        navGenerate.addEventListener('click', () => switchView('generate'));
+        navHistory.addEventListener('click', () => switchView('history'));
+        generateBtn.addEventListener('click', handleGenerate);
+        logoutBtn.addEventListener('click', handleLogout);
+        startGenerate.addEventListener('click', () => switchView('generate'));
+        closeModal.addEventListener('click', () => imageModal.classList.add('hidden'));
+
+        // Functions
+        function toggleAuthMode() {
+            authMode = authMode === 'login' ? 'register' : 'login';
+            authText.textContent = authMode === 'login' ? 'Se connecter' : 'S\'inscrire';
+            toggleAuth.textContent = authMode === 'login' ? 'Créer un compte' : 'Déjà un compte ? Se connecter';
+        }
+
+        async function handleAuth() {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!email || !password) {
+                showError('Veuillez remplir tous les champs');
+                return;
             }
-        };
 
-        const mockFirestore = {
-            data: [], // Stockage local des données
-            collection: (name) => ({
-                add: async (data) => {
-                    const newDoc = {
-                        id: Date.now().toString(),
-                        ...data,
-                        timestamp: new Date()
-                    };
-                    mockFirestore.data.push(newDoc);
-                    console.log('Saved to Firestore:', newDoc);
-                    return { id: newDoc.id };
-                },
-                where: (field, operator, value) => ({
-                    orderBy: (orderField, direction) => ({
-                        get: async () => {
-                            let results = mockFirestore.data.filter(doc => {
-                                if (operator === '==') return doc[field] === value;
-                                return true;
-                            });
-                            
-                            if (orderField === 'timestamp' && direction === 'desc') {
-                                results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                            }
-                            
-                            return {
-                                docs: results.map(doc => ({
-                                    id: doc.id,
-                                    data: () => doc
-                                }))
-                            };
-                        }
+            if (authMode === 'register' && password.length < 6) {
+                showError('Le mot de passe doit contenir au moins 6 caractères');
+                return;
+            }
+
+            setLoading(true);
+            hideError();
+
+            try {
+                // Simulate auth
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                currentUser = {
+                    email: email,
+                    uid: email.replace('@', '_').replace('.', '_')
+                };
+
+                userEmailSpan.textContent = email;
+                authPage.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                loadHistory();
+                
+            } catch (error) {
+                showError('Erreur de connexion');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function setLoading(loading) {
+            if (loading) {
+                authLoader.classList.remove('hidden');
+                authText.textContent = 'Connexion...';
+                authBtn.disabled = true;
+            } else {
+                authLoader.classList.add('hidden');
+                authText.textContent = authMode === 'login' ? 'Se connecter' : 'S\'inscrire';
+                authBtn.disabled = false;
+            }
+        }
+
+        function showError(message) {
+            authError.textContent = message;
+            authError.classList.remove('hidden');
+        }
+
+        function hideError() {
+            authError.classList.add('hidden');
+        }
+
+        function switchView(view) {
+            currentView = view;
+            
+            if (view === 'generate') {
+                generateView.classList.remove('hidden');
+                historyView.classList.add('hidden');
+                navGenerate.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors bg-purple-100 text-purple-700';
+                navHistory.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100';
+            } else {
+                generateView.classList.add('hidden');
+                historyView.classList.remove('hidden');
+                navGenerate.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100';
+                navHistory.className = 'flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors bg-purple-100 text-purple-700';
+            }
+        }
+
+        async function handleGenerate() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) return;
+
+            setGenerating(true);
+            hideGenerateError();
+
+            try {
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        email: currentUser.email
                     })
-                })
-            })
-        };
+                });
 
-        const AIImageGenerator = () => {
-            const [user, setUser] = useState(null);
-            const [currentView, setCurrentView] = useState('auth');
-            const [authMode, setAuthMode] = useState('login');
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [prompt, setPrompt] = useState('');
-            const [generating, setGenerating] = useState(false);
-            const [history, setHistory] = useState([]);
-            const [selectedImage, setSelectedImage] = useState(null);
-
-            // Auth functions
-            const handleAuth = async () => {
-                setLoading(true);
-                setError('');
-
-                try {
-                    if (authMode === 'login') {
-                        await mockAuth.signInWithEmailAndPassword(email, password);
-                    } else {
-                        await mockAuth.createUserWithEmailAndPassword(email, password);
-                    }
-                    setUser(mockAuth.currentUser);
-                    setCurrentView('dashboard');
-                    loadHistory();
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
+                let result;
+                if (response.ok) {
+                    result = await response.json();
+                } else {
+                    throw new Error('Erreur réseau');
                 }
-            };
 
-            const handleLogout = async () => {
-                await mockAuth.signOut();
-                setUser(null);
-                setCurrentView('auth');
-            };
+                const newGeneration = {
+                    id: Date.now().toString(),
+                    prompt: prompt,
+                    dalle_url: result.dalle_url || `https://via.placeholder.com/512x512/ff6b6b/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
+                    stable_url: result.stable_url || `https://via.placeholder.com/512x512/4ecdc4/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
+                    midjourney_url: result.midjourney_url || `https://via.placeholder.com/512x512/45b7d1/white?text=${encodeURIComponent('MJ: ' + prompt.slice(0, 20))}`,
+                    dalle_status: result.dalle_status || "success",
+                    stable_status: result.stable_status || "success",
+                    midjourney_status: result.midjourney_status || "success",
+                    timestamp: new Date(),
+                    userId: currentUser.uid
+                };
 
-            // Load user history
-            const loadHistory = async () => {
-                try {
-                    if (!user) return;
-                    
-                    const snapshot = await mockFirestore.collection('generations')
-                        .where('userId', '==', user.uid)
-                        .orderBy('timestamp', 'desc')
-                        .get();
-                        
-                    const historyData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setHistory(historyData);
-                } catch (err) {
-                    console.error('Error loading history:', err);
-                }
-            };
+                generationHistory.unshift(newGeneration);
+                promptInput.value = '';
+                updateHistory();
+                switchView('history');
 
-            // Generate images avec VRAI appel n8n
-            const handleGenerate = async () => {
-                if (!prompt.trim()) return;
+            } catch (error) {
+                console.error('Erreur génération:', error);
+                showGenerateError('Erreur lors de la génération. Mode démo activé.');
                 
-                setGenerating(true);
-                setError('');
-                
-                try {
-                    // APPEL REAL vers votre webhook n8n
-                    const response = await fetch(N8N_WEBHOOK_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            prompt: prompt,
-                            email: user.email
-                        })
-                    });
+                // Fallback demo
+                const fallbackGeneration = {
+                    id: Date.now().toString(),
+                    prompt: prompt,
+                    dalle_url: `https://via.placeholder.com/512x512/ff6b6b/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
+                    stable_url: `https://via.placeholder.com/512x512/4ecdc4/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
+                    midjourney_url: `https://via.placeholder.com/512x512/45b7d1/white?text=${encodeURIComponent('MJ: ' + prompt.slice(0, 20))}`,
+                    dalle_status: "demo",
+                    stable_status: "demo",
+                    midjourney_status: "demo",
+                    timestamp: new Date(),
+                    userId: currentUser.uid
+                };
 
-                    if (!response.ok) {
-                        throw new Error('Erreur réseau');
-                    }
-
-                    const result = await response.json();
-                    
-                    // Structure attendue du webhook n8n
-                    const newGeneration = {
-                        prompt: prompt,
-                        dalle_url: result.dalle_url || `https://via.placeholder.com/512x512/ff6b6b/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
-                        stable_url: result.stable_url || `https://via.placeholder.com/512x512/4ecdc4/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
-                        midjourney_url: result.midjourney_url || `https://via.placeholder.com/512x512/45b7d1/white?text=${encodeURIComponent('MJ: ' + prompt.slice(0, 20))}`,
-                        dalle_status: result.dalle_status || "success",
-                        stable_status: result.stable_status || "success", 
-                        midjourney_status: result.midjourney_status || "success",
-                        userId: user.uid
-                    };
-
-                    // Save to Firestore
-                    await mockFirestore.collection('generations').add(newGeneration);
-                    
-                    // Reload history
-                    await loadHistory();
-                    
-                    // Reset prompt
-                    setPrompt('');
-                    
-                    // Switch to history view
-                    setCurrentView('history');
-                    
-                } catch (err) {
-                    console.error('Erreur génération:', err);
-                    setError('Erreur lors de la génération. Vérifiez votre connexion.');
-                    
-                    // Fallback en cas d'erreur - génération de test
-                    const fallbackGeneration = {
-                        prompt: prompt,
-                        dalle_url: `https://via.placeholder.com/512x512/ff6b6b/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
-                        stable_url: `https://via.placeholder.com/512x512/4ecdc4/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
-                        midjourney_url: `https://via.placeholder.com/512x512/45b7d1/white?text=${encodeURIComponent('MJ: ' + prompt.slice(0, 20))}`,
-                        dalle_status: "demo",
-                        stable_status: "demo",
-                        midjourney_status: "demo", 
-                        userId: user.uid
-                    };
-                    
-                    await mockFirestore.collection('generations').add(fallbackGeneration);
-                    await loadHistory();
-                    setPrompt('');
-                    setCurrentView('history');
-                    
-                } finally {
-                    setGenerating(false);
-                }
-            };
-
-            // Auth Page
-            if (currentView === 'auth') {
-                return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-800 flex items-center justify-center p-4" },
-                    React.createElement('div', { className: "bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md" },
-                        React.createElement('div', { className: "text-center mb-8" },
-                            React.createElement('div', { className: "bg-gradient-to-r from-purple-600 to-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" },
-                                React.createElement(Sparkles, { className: "text-white", size: 32 })
-                            ),
-                            React.createElement('h1', { className: "text-3xl font-bold text-gray-800 mb-2" }, "AI Image Generator"),
-                            React.createElement('p', { className: "text-gray-600" }, "Comparez DALL-E, Stable Diffusion et Midjourney")
-                        ),
-
-                        React.createElement('div', { className: "space-y-6" },
-                            React.createElement('div', null,
-                                React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-2" }, "Email"),
-                                React.createElement('input', {
-                                    type: "email",
-                                    value: email,
-                                    onChange: (e) => setEmail(e.target.value),
-                                    className: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent",
-                                    placeholder: "votre@email.com",
-                                    required: true
-                                })
-                            ),
-
-                            React.createElement('div', null,
-                                React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-2" }, "Mot de passe"),
-                                React.createElement('input', {
-                                    type: "password",
-                                    value: password,
-                                    onChange: (e) => setPassword(e.target.value),
-                                    className: "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent",
-                                    placeholder: "••••••••",
-                                    required: true
-                                })
-                            ),
-
-                            error && React.createElement('div', { className: "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg" }, error),
-
-                            React.createElement('button', {
-                                type: "button",
-                                onClick: handleAuth,
-                                disabled: loading,
-                                className: "w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-4 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center"
-                            },
-                                loading && React.createElement(Loader2, { className: "animate-spin mr-2", size: 20 }),
-                                loading ? 'Connexion...' : authMode === 'login' ? 'Se connecter' : 'S\'inscrire'
-                            )
-                        ),
-
-                        React.createElement('div', { className: "mt-6 text-center" },
-                            React.createElement('button', {
-                                onClick: () => setAuthMode(authMode === 'login' ? 'register' : 'login'),
-                                className: "text-purple-600 hover:text-purple-800 font-medium"
-                            },
-                                authMode === 'login' ? 'Créer un compte' : 'Déjà un compte ? Se connecter'
-                            )
-                        )
-                    )
-                );
+                generationHistory.unshift(fallbackGeneration);
+                promptInput.value = '';
+                updateHistory();
+                switchView('history');
+            } finally {
+                setGenerating(false);
             }
+        }
 
-            // Main Dashboard
-            return React.createElement('div', { className: "min-h-screen bg-gray-50 flex" },
-                // Sidebar
-                React.createElement('div', { className: "w-80 bg-white border-r border-gray-200 flex flex-col" },
-                    // Header
-                    React.createElement('div', { className: "p-6 border-b border-gray-200" },
-                        React.createElement('div', { className: "flex items-center gap-3 mb-4" },
-                            React.createElement('div', { className: "bg-gradient-to-r from-purple-600 to-blue-600 w-10 h-10 rounded-full flex items-center justify-center" },
-                                React.createElement(Sparkles, { className: "text-white", size: 20 })
-                            ),
-                            React.createElement('div', null,
-                                React.createElement('h1', { className: "font-bold text-gray-800" }, "AI Generator"),
-                                React.createElement('p', { className: "text-sm text-gray-600" }, user?.email)
-                            )
-                        ),
-                        
-                        React.createElement('div', { className: "flex gap-2" },
-                            React.createElement('button', {
-                                onClick: () => setCurrentView('generate'),
-                                className: `flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                                    currentView === 'generate' 
-                                        ? 'bg-purple-100 text-purple-700' 
-                                        : 'text-gray-600 hover:bg-gray-100'
-                                }`
-                            },
-                                React.createElement(MessageSquare, { size: 16, className: "inline mr-2" }),
-                                "Générer"
-                            ),
-                            React.createElement('button', {
-                                onClick: () => setCurrentView('history'),
-                                className: `flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                                    currentView === 'history' 
-                                        ? 'bg-purple-100 text-purple-700' 
-                                        : 'text-gray-600 hover:bg-gray-100'
-                                }`
-                            },
-                                React.createElement(History, { size: 16, className: "inline mr-2" }),
-                                "Historique"
-                            )
-                        )
-                    ),
+        function setGenerating(generating) {
+            if (generating) {
+                generateIcon.setAttribute('data-lucide', 'loader-2');
+                generateIcon.classList.add('animate-spin');
+                generateText.textContent = 'Génération en cours... (3 IA en parallèle)';
+                generateBtn.disabled = true;
+                generateProgress.classList.remove('hidden');
+                lucide.createIcons();
+            } else {
+                generateIcon.setAttribute('data-lucide', 'sparkles');
+                generateIcon.classList.remove('animate-spin');
+                generateText.textContent = 'Générer avec 3 IA';
+                generateBtn.disabled = false;
+                generateProgress.classList.add('hidden');
+                lucide.createIcons();
+            }
+        }
 
-                    // History List in Sidebar
-                    React.createElement('div', { className: "flex-1 overflow-y-auto p-4" },
-                        React.createElement('h3', { className: "text-sm font-medium text-gray-700 mb-3" }, "Générations récentes"),
-                        React.createElement('div', { className: "space-y-2" },
-                            history.slice(0, 10).map((item) => 
-                                React.createElement('div', {
-                                    key: item.id,
-                                    className: "p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors",
-                                    onClick: () => setCurrentView('history')
-                                },
-                                    React.createElement('p', { className: "text-sm text-gray-800 line-clamp-2" }, item.prompt),
-                                    React.createElement('p', { className: "text-xs text-gray-500 mt-1" },
-                                        item.timestamp?.toLocaleDateString?.() || new Date(item.timestamp).toLocaleDateString()
-                                    )
-                                )
-                            )
-                        )
-                    ),
+        function showGenerateError(message) {
+            generateError.textContent = message;
+            generateError.classList.remove('hidden');
+        }
 
-                    // Footer
-                    React.createElement('div', { className: "p-4 border-t border-gray-200" },
-                        React.createElement('button', {
-                            onClick: handleLogout,
-                            className: "w-full flex items-center justify-center gap-2 py-2 px-4 text-gray-600 hover:text-gray-800 transition-colors"
-                        },
-                            React.createElement(LogOut, { size: 16 }),
-                            "Se déconnecter"
-                        )
-                    )
-                ),
+        function hideGenerateError() {
+            generateError.classList.add('hidden');
+        }
 
-                // Main Content
-                React.createElement('div', { className: "flex-1 flex flex-col" },
-                    // Generate View
-                    currentView === 'generate' && React.createElement('div', { className: "flex-1 flex flex-col" },
-                        React.createElement('div', { className: "flex-1 flex items-center justify-center p-8" },
-                            React.createElement('div', { className: "max-w-4xl w-full" },
-                                React.createElement('div', { className: "text-center mb-8" },
-                                    React.createElement('h2', { className: "text-3xl font-bold text-gray-800 mb-4" },
-                                        "Générez des images avec 3 IA"
-                                    ),
-                                    React.createElement('p', { className: "text-gray-600" },
-                                        "Comparez DALL-E 3, Stable Diffusion XL et Midjourney en un clic"
-                                    )
-                                ),
+        function loadHistory() {
+            // Load from localStorage
+            const saved = localStorage.getItem(`history_${currentUser.uid}`);
+            if (saved) {
+                try {
+                    generationHistory = JSON.parse(saved);
+                } catch (e) {
+                    generationHistory = [];
+                }
+            }
+            updateHistory();
+        }
 
-                                React.createElement('div', { className: "bg-white rounded-2xl shadow-lg p-8" },
-                                    React.createElement('div', { className: "mb-6" },
-                                        React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-3" },
-                                            "Décrivez l'image que vous voulez générer"
-                                        ),
-                                        React.createElement('textarea', {
-                                            value: prompt,
-                                            onChange: (e) => setPrompt(e.target.value),
-                                            className: "w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none",
-                                            rows: 4,
-                                            placeholder: "Ex: Un chat astronaute sur la lune en style cartoon, très détaillé, couleurs vives..."
-                                        })
-                                    ),
+        function updateHistory() {
+            // Save to localStorage
+            localStorage.setItem(`history_${currentUser.uid}`, JSON.stringify(generationHistory));
 
-                                    React.createElement('button', {
-                                        onClick: handleGenerate,
-                                        disabled: generating || !prompt.trim(),
-                                        className: "w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium flex items-center justify-center text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                    },
-                                        generating ? (
-                                            React.createElement(React.Fragment, null,
-                                                React.createElement(Loader2, { className: "animate-spin mr-3", size: 24 }),
-                                                "Génération en cours... (3 IA en parallèle)"
-                                            )
-                                        ) : (
-                                            React.createElement(React.Fragment, null,
-                                                React.createElement(Sparkles, { className: "mr-3", size: 24 }),
-                                                "Générer avec 3 IA"
-                                            )
-                                        )
-                                    ),
+            // Update sidebar
+            sidebarHistory.innerHTML = '';
+            generationHistory.slice(0, 10).forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors';
+                div.onclick = () => switchView('history');
+                div.innerHTML = `
+                    <p class="text-sm text-gray-800 line-clamp-2">${item.prompt}</p>
+                    <p class="text-xs text-gray-500 mt-1">${new Date(item.timestamp).toLocaleDateString()}</p>
+                `;
+                sidebarHistory.appendChild(div);
+            });
 
-                                    error && React.createElement('div', { className: "mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg" }, error),
+            // Update main history
+            if (generationHistory.length === 0) {
+                historyContent.classList.add('hidden');
+                emptyHistory.classList.remove('hidden');
+            } else {
+                historyContent.classList.remove('hidden');
+                emptyHistory.classList.add('hidden');
+                
+                historyContent.innerHTML = '';
+                generationHistory.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-white rounded-2xl shadow-lg p-6';
+                    div.innerHTML = `
+                        <div class="mb-4">
+                            <h3 class="text-xl font-semibold text-gray-800 mb-2">${item.prompt}</h3>
+                            <p class="text-gray-500 text-sm">${new Date(item.timestamp).toLocaleDateString()} à ${new Date(item.timestamp).toLocaleTimeString()}</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            ${createImageCard('DALL-E 3', item.dalle_url, 'bg-red-500')}
+                            ${createImageCard('Stable Diffusion XL', item.stable_url, 'bg-green-500')}
+                            ${createImageCard('Midjourney', item.midjourney_url, 'bg-blue-500')}
+                        </div>
+                    `;
+                    historyContent.appendChild(div);
+                });
 
-                                    generating && React.createElement('div', { className: "mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4" },
-                                        React.createElement('div', { className: "flex items-center gap-3 text-blue-700" },
-                                            React.createElement(Loader2, { className: "animate-spin", size: 20 }),
-                                            React.createElement('span', { className: "font-medium" }, "Génération en cours...")
-                                        ),
-                                        React.createElement('p', { className: "text-blue-600 text-sm mt-2" },
-                                            "DALL-E 3, Stable Diffusion XL et Midjourney travaillent sur votre prompt"
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    ),
+                // Add click events for images
+                document.querySelectorAll('.image-preview').forEach(img => {
+                    img.addEventListener('click', (e) => {
+                        modalImage.src = e.target.src;
+                        imageModal.classList.remove('hidden');
+                    });
+                });
+            }
+        }
 
-                    // History View
-                    currentView === 'history' && React.createElement('div', { className: "flex-1 p-8" },
-                        React.createElement('div', { className: "mb-8" },
-                            React.createElement('h2', { className: "text-3xl font-bold text-gray-800 mb-2" }, "Historique des générations"),
-                            React.createElement('p', { className: "text-gray-600" }, "Toutes vos créations AI en un coup d'œil")
-                        ),
+        function createImageCard(title, url, colorClass) {
+            return `
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 ${colorClass} rounded-full"></div>
+                        <span class="font-medium text-gray-700">${title}</span>
+                    </div>
+                    <div class="relative group">
+                        <img src="${url}" alt="${title} generation" class="image-preview w-full aspect-square object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity">
+                    </div>
+                </div>
+            `;
+        }
 
-                        React.createElement('div', { className: "space-y-8" },
-                            history.map((item) =>
-                                React.createElement('div', { key: item.id, className: "bg-white rounded-2xl shadow-lg p-6" },
-                                    React.createElement('div', { className: "mb-4" },
-                                        React.createElement('h3', { className: "text-xl font-semibold text-gray-800 mb-2" }, item.prompt),
-                                        React.createElement('p', { className: "text-gray-500 text-sm" },
-                                            (item.timestamp?.toLocaleDateString?.() || new Date(item.timestamp).toLocaleDateString()) + ' à ' + 
-                                            (item.timestamp?.toLocaleTimeString?.() || new Date(item.timestamp).toLocaleTimeString())
-                                        )
-                                    ),
-
-                                    React.createElement('div', { className: "grid grid-cols-1 md:grid-cols-3 gap-6" },
-                                        // DALL-E
-                                        React.createElement('div', { className: "space-y-3" },
-                                            React.createElement('div', { className: "flex items-center gap-2" },
-                                                React.createElement('div', { className: "w-3 h-3 bg-red-500 rounded-full" }),
-                                                React.createElement('span', { className: "font-medium text-gray-700" }, "DALL-E 3")
-                                            ),
-                                            React.createElement('div', { className: "relative group" },
-                                                React.createElement('img', {
-                                                    src: item.dalle_url,
-                                                    alt: "DALL-E generation",
-                                                    className: "w-full aspect-square object-cover rounded-lg border border-gray-200"
-                                                }),
-                                                React.createElement('div', { className: "absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center" },
-                                                    React.createElement('div', { className: "opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2" },
-                                                        React.createElement('button', {
-                                                            onClick: () => setSelectedImage(item.dalle_url),
-                                                            className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                                                        },
-                                                            React.createElement(Eye, { size: 16 })
-                                                        ),
-                                                        React.createElement('button', { className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors" },
-                                                            React.createElement(Download, { size: 16 })
-                                                        )
-                                                    )
-                                                )
-                                            )
-                                        ),
-
-                                        // Stable Diffusion
-                                        React.createElement('div', { className: "space-y-3" },
-                                            React.createElement('div', { className: "flex items-center gap-2" },
-                                                React.createElement('div', { className: "w-3 h-3 bg-green-500 rounded-full" }),
-                                                React.createElement('span', { className: "font-medium text-gray-700" }, "Stable Diffusion XL")
-                                            ),
-                                            React.createElement('div', { className: "relative group" },
-                                                React.createElement('img', {
-                                                    src: item.stable_url,
-                                                    alt: "Stable Diffusion generation",
-                                                    className: "w-full aspect-square object-cover rounded-lg border border-gray-200"
-                                                }),
-                                                React.createElement('div', { className: "absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center" },
-                                                    React.createElement('div', { className: "opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2" },
-                                                        React.createElement('button', {
-                                                            onClick: () => setSelectedImage(item.stable_url),
-                                                            className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                                                        },
-                                                            React.createElement(Eye, { size: 16 })
-                                                        ),
-                                                        React.createElement('button', { className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors" },
-                                                            React.createElement(Download, { size: 16 })
-                                                        )
-                                                    )
-                                                )
-                                            )
-                                        ),
-
-                                        // Midjourney
-                                        React.createElement('div', { className: "space-y-3" },
-                                            React.createElement('div', { className: "flex items-center gap-2" },
-                                                React.createElement('div', { className: "w-3 h-3 bg-blue-500 rounded-full" }),
-                                                React.createElement('span', { className: "font-medium text-gray-700" }, "Midjourney")
-                                            ),
-                                            React.createElement('div', { className: "relative group" },
-                                                React.createElement('img', {
-                                                    src: item.midjourney_url,
-                                                    alt: "Midjourney generation",
-                                                    className: "w-full aspect-square object-cover rounded-lg border border-gray-200"
-                                                }),
-                                                React.createElement('div', { className: "absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center" },
-                                                    React.createElement('div', { className: "opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2" },
-                                                        React.createElement('button', {
-                                                            onClick: () => setSelectedImage(item.midjourney_url),
-                                                            className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                                                        },
-                                                            React.createElement(Eye, { size: 16 })
-                                                        ),
-                                                        React.createElement('button', { className: "p-2 bg-white rounded-full hover:bg-gray-100 transition-colors" },
-                                                            React.createElement(Download, { size: 16 })
-                                                        )
-                                                    )
-                                                )
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        ),
-
-                        history.length === 0 && React.createElement('div', { className: "text-center py-16" },
-                            React.createElement(Image, { size: 64, className: "text-gray-300 mx-auto mb-4" }),
-                            React.createElement('h3', { className: "text-xl font-medium text-gray-500 mb-2" }, "Aucune génération"),
-                            React.createElement('p', { className: "text-gray-400 mb-6" }, "Commencez par générer votre première image"),
-                            React.createElement('button', {
-                                onClick: () => setCurrentView('generate'),
-                                className: "bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium"
-                            },
-                                "Générer une image"
-                            )
-                        )
-                    )
-                ),
-
-                // Image Modal
-                selectedImage && React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" },
-                    React.createElement('div', { className: "relative max-w-4xl max-h-full" },
-                        React.createElement('img', {
-                            src: selectedImage,
-                            alt: "Image en grand",
-                            className: "max-w-full max-h-full object-contain rounded-lg"
-                        }),
-                        React.createElement('button', {
-                            onClick: () => setSelectedImage(null),
-                            className: "absolute top-4 right-4 bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                        }, "✕")
-                    )
-                )
-            );
-        };
-
-        // Render the app
-        ReactDOM.render(React.createElement(AIImageGenerator), document.getElementById('root'));
+        function handleLogout() {
+            currentUser = null;
+            generationHistory = [];
+            authPage.classList.remove('hidden');
+            mainApp.classList.add('hidden');
+            emailInput.value = '';
+            passwordInput.value = '';
+            promptInput.value = '';
+            switchView('generate');
+        }
     </script>
 </body>
 </html>
