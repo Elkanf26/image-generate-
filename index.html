@@ -303,10 +303,10 @@
                     const data = await response.json();
                     
                     // Si on reçoit les données, afficher les résultats
-if (data.success) {
-    showResults(data);
-    return;
-}
+               if (data.success) {
+                showResults(data);
+                return;
+                }
                     
                     // Sinon afficher le message de succès
                     loading.classList.remove('show');
@@ -337,6 +337,33 @@ if (data.success) {
                 }, 5000);
             }
         });
+    function showResults(data) {
+            document.body.innerHTML = `
+                <div style="max-width: 1200px; margin: 0 auto; padding: 20px; text-align: center;">
+                    <h1 style="color: #333; margin-bottom: 20px;">✨ Vos Images Générées</h1>
+                    <p style="font-size: 1.2rem; margin-bottom: 30px;"><strong>Prompt:</strong> "${data.prompt}"</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 30px 0;">
+                        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                            <h3 style="color: #ff6b6b;">🎨 DALL-E 3</h3>
+                            <img src="${data.dalle_url}" style="width: 100%; border-radius: 10px; margin: 10px 0;" alt="DALL-E image">
+                            <p style="color: ${data.dalle_status === 'success' ? 'green' : 'red'};">${data.dalle_status === 'success' ? '✅ Succès' : '❌ Échec'}</p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                            <h3 style="color: #4ecdc4;">🔮 Stable Diffusion</h3>
+                            <img src="${data.sd_url}" style="width: 100%; border-radius: 10px; margin: 10px 0;" alt="SD image">
+                            <p style="color: ${data.sd_status === 'success' ? 'green' : 'red'};">${data.sd_status === 'success' ? '✅ Succès' : '❌ Échec'}</p>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                            <h3 style="color: #45b7d1;">🚀 Midjourney</h3>
+                            <img src="${data.mj_url}" style="width: 100%; border-radius: 10px; margin: 10px 0;" alt="MJ image">
+                            <p style="color: ${data.mj_status === 'success' ? 'green' : 'red'};">${data.mj_status === 'success' ? '✅ Succès' : '❌ Échec'}</p>
+                        </div>
+                    </div>
+                    <p style="margin: 20px 0;">⏱️ Temps total: ${data.total_time}s</p>
+                    <button onclick="location.reload()" style="padding: 15px 30px; background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; border-radius: 25px; font-size: 1.1rem; cursor: pointer;">🔄 Nouvelle génération</button>
+                </div>
+            `;
+        }
     </script>
 </body>
 </html>
