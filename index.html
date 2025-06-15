@@ -762,10 +762,12 @@
             const prompt = promptInput.value.trim();
             if (!prompt) return;
 
+            const generationId = Date.now().toString();
             setGenerating(true);
             hideGenerateError();
 
             try {
+                // Déclencher la génération sur n8n
                 const response = await fetch(N8N_WEBHOOK_URL, {
                     method: 'POST',
                     headers: {
@@ -773,34 +775,38 @@
                     },
                     body: JSON.stringify({
                         prompt: prompt,
-                        email: currentUser.email
+                        email: currentUser.email,
+                        generationId: generationId
                     })
                 });
 
-                let result;
-                if (response.ok) {
-                    result = await response.json();
-                } else {
+                if (!response.ok) {
                     throw new Error('Erreur réseau');
                 }
 
-                const newGeneration = {
-                    id: Date.now().toString(),
+                // Créer l'entrée en attente
+                const pendingGeneration = {
+                    id: generationId,
                     prompt: prompt,
-                    dalle_url: result.dalle_url || `https://via.placeholder.com/512x512/ef4444/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
-                    stable_url: result.stable_url || `https://via.placeholder.com/512x512/10b981/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
-                    midjourney_url: result.midjourney_url || `https://via.placeholder.com/512x512/3b82f6/white?text=${encodeURIComponent('MJ: ' + prompt.slice(0, 20))}`,
-                    dalle_status: result.dalle_status || "success",
-                    stable_status: result.stable_status || "success",
-                    midjourney_status: result.midjourney_status || "success",
+                    status: 'generating',
+                    progress: 0,
+                    dalle_url: null,
+                    stable_url: null,
+                    midjourney_url: null,
+                    dalle_status: "generating",
+                    stable_status: "generating",
+                    midjourney_status: "generating",
                     timestamp: new Date(),
                     userId: currentUser.uid
                 };
 
-                generationHistory.unshift(newGeneration);
+                generationHistory.unshift(pendingGeneration);
                 promptInput.value = '';
                 updateHistory();
                 switchView('history');
+
+                // Démarrer le polling pour vérifier l'état
+                startPolling(generationId);
 
             } catch (error) {
                 console.error('Erreur génération:', error);
@@ -808,7 +814,7 @@
                 
                 // Fallback demo
                 const fallbackGeneration = {
-                    id: Date.now().toString(),
+                    id: generationId,
                     prompt: prompt,
                     dalle_url: `https://via.placeholder.com/512x512/ef4444/white?text=${encodeURIComponent('DALL-E: ' + prompt.slice(0, 20))}`,
                     stable_url: `https://via.placeholder.com/512x512/10b981/white?text=${encodeURIComponent('SD: ' + prompt.slice(0, 20))}`,
@@ -816,6 +822,8 @@
                     dalle_status: "demo",
                     stable_status: "demo",
                     midjourney_status: "demo",
+                    status: "completed",
+                    progress: 100,
                     timestamp: new Date(),
                     userId: currentUser.uid
                 };
@@ -826,6 +834,81 @@
                 switchView('history');
             } finally {
                 setGenerating(false);
+            }
+        }
+
+        async function startPolling(generationId) {
+            const maxPollingTime = 90 * 60 * 1000; // 90 minutes max
+            const pollingInterval = 30 * 1000; // 30 secondes
+            const startTime = Date.now();
+            let progress = 0;
+
+            const pollInterval = setInterval(async () => {
+                const elapsed = Date.now() - startTime;
+                progress = Math.min(95, (elapsed / maxPollingTime) * 100);
+
+                // Mettre à jour la barre de progression
+                updateGenerationProgress(generationId, progress);
+
+                // Vérifier les résultats (simulation d'un endpoint de status)
+                try {
+                    // Pour l'instant, simulation - vous pourrez remplacer par un vrai endpoint
+                    const shouldComplete = elapsed > 5 * 60 * 1000; // Compléter après 5 minutes pour demo
+                    
+                    if (shouldComplete) {
+                        // Simuler la récupération des vraies images depuis n8n
+                        const completedGeneration = {
+                            dalle_url: `https://via.placeholder.com/512x512/ef4444/white?text=${encodeURIComponent('DALL-E-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
+                            stable_url: `https://via.placeholder.com/512x512/10b981/white?text=${encodeURIComponent('SD-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
+                            midjourney_url: `https://via.placeholder.com/512x512/3b82f6/white?text=${encodeURIComponent('MJ-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
+                            dalle_status: "success",
+                            stable_status: "success",
+                            midjourney_status: "success",
+                            status: "completed",
+                            progress: 100
+                        };
+
+                        completeGeneration(generationId, completedGeneration);
+                        clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error('Erreur polling:', error);
+                }
+
+                // Timeout après 90 minutes
+                if (elapsed > maxPollingTime) {
+                    clearInterval(pollInterval);
+                    failGeneration(generationId);
+                }
+            }, pollingInterval);
+        }
+
+        function updateGenerationProgress(generationId, progress) {
+            const generation = generationHistory.find(g => g.id === generationId);
+            if (generation) {
+                generation.progress = progress;
+                updateHistory();
+            }
+        }
+
+        function completeGeneration(generationId, results) {
+            const generation = generationHistory.find(g => g.id === generationId);
+            if (generation) {
+                Object.assign(generation, results);
+                updateHistory();
+                
+                // Notification visuelle
+                showGenerateError('✅ Génération terminée ! Vos images sont prêtes.');
+                setTimeout(() => hideGenerateError(), 5000);
+            }
+        }
+
+        function failGeneration(generationId) {
+            const generation = generationHistory.find(g => g.id === generationId);
+            if (generation) {
+                generation.status = "failed";
+                generation.progress = 0;
+                updateHistory();
             }
         }
 
@@ -877,9 +960,16 @@
                 const div = document.createElement('div');
                 div.className = 'history-sidebar-item';
                 div.onclick = () => switchView('history');
+                
+                const statusIndicator = item.status === 'generating' ? 
+                    `<span style="color: #3b82f6;">🔄 ${Math.round(item.progress || 0)}%</span>` : 
+                    item.status === 'failed' ? 
+                    `<span style="color: #ef4444;">❌ Échec</span>` : 
+                    `<span style="color: #10b981;">✅ Terminé</span>`;
+                
                 div.innerHTML = `
                     <div class="history-sidebar-title">${item.prompt}</div>
-                    <div class="history-sidebar-date">${new Date(item.timestamp).toLocaleDateString()}</div>
+                    <div class="history-sidebar-date">${new Date(item.timestamp).toLocaleDateString()} ${statusIndicator}</div>
                 `;
                 sidebarHistory.appendChild(div);
             });
@@ -895,35 +985,113 @@
                 generationHistory.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'history-item';
-                    div.innerHTML = `
-                        <div class="history-header">
-                            <h3 class="history-title">${item.prompt}</h3>
-                            <p class="history-date">${new Date(item.timestamp).toLocaleDateString()} à ${new Date(item.timestamp).toLocaleTimeString()}</p>
-                        </div>
-                        <div class="image-grid">
-                            <div class="image-card">
-                                <div class="image-label">
-                                    <div class="status-dot status-dalle"></div>
-                                    DALL-E 3
-                                </div>
-                                <img src="${item.dalle_url}" alt="DALL-E generation" class="image-preview" onclick="openModal('${item.dalle_url}')">
+                    
+                    let contentHTML;
+                    
+                    if (item.status === 'generating') {
+                        // Affichage avec barre de progression
+                        const progress = item.progress || 0;
+                        const estimatedTime = progress > 0 ? Math.round((100 - progress) * 1.5) : 90; // Estimation en minutes
+                        
+                        contentHTML = `
+                            <div class="history-header">
+                                <h3 class="history-title">${item.prompt}</h3>
+                                <p class="history-date">${new Date(item.timestamp).toLocaleDateString()} à ${new Date(item.timestamp).toLocaleTimeString()}</p>
                             </div>
-                            <div class="image-card">
-                                <div class="image-label">
-                                    <div class="status-dot status-stable"></div>
-                                    Stable Diffusion XL
+                            <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                                    <span class="spinning">⏳</span>
+                                    <span style="font-weight: 500; color: #0369a1;">Génération en cours... ${Math.round(progress)}%</span>
                                 </div>
-                                <img src="${item.stable_url}" alt="Stable Diffusion generation" class="image-preview" onclick="openModal('${item.stable_url}')">
-                            </div>
-                            <div class="image-card">
-                                <div class="image-label">
-                                    <div class="status-dot status-midjourney"></div>
-                                    Midjourney
+                                <div style="background: #e0f2fe; border-radius: 0.25rem; height: 0.5rem; overflow: hidden;">
+                                    <div style="background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; width: ${progress}%; transition: width 0.5s;"></div>
                                 </div>
-                                <img src="${item.midjourney_url}" alt="Midjourney generation" class="image-preview" onclick="openModal('${item.midjourney_url}')">
+                                <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #0369a1;">
+                                    Temps estimé restant: ~${estimatedTime} minutes
+                                </p>
+                                <p style="font-size: 0.875rem; color: #0369a1;">
+                                    DALL-E 3, Stable Diffusion XL et Midjourney travaillent sur votre prompt
+                                </p>
                             </div>
-                        </div>
-                    `;
+                            <div class="image-grid">
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot" style="background: #6b7280;"></div>
+                                        DALL-E 3 - En cours
+                                    </div>
+                                    <div style="width: 100%; aspect-ratio: 1; background: #f3f4f6; border-radius: 0.5rem; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280;">
+                                        <span class="spinning">⏳</span>
+                                    </div>
+                                </div>
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot" style="background: #6b7280;"></div>
+                                        Stable Diffusion XL - En cours
+                                    </div>
+                                    <div style="width: 100%; aspect-ratio: 1; background: #f3f4f6; border-radius: 0.5rem; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280;">
+                                        <span class="spinning">⏳</span>
+                                    </div>
+                                </div>
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot" style="background: #6b7280;"></div>
+                                        Midjourney - En cours
+                                    </div>
+                                    <div style="width: 100%; aspect-ratio: 1; background: #f3f4f6; border-radius: 0.5rem; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280;">
+                                        <span class="spinning">⏳</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else if (item.status === 'failed') {
+                        // Affichage d'échec
+                        contentHTML = `
+                            <div class="history-header">
+                                <h3 class="history-title">${item.prompt}</h3>
+                                <p class="history-date">${new Date(item.timestamp).toLocaleDateString()} à ${new Date(item.timestamp).toLocaleTimeString()}</p>
+                            </div>
+                            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.5rem; padding: 1rem; color: #dc2626;">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <span>❌</span>
+                                    <span style="font-weight: 500;">Échec de la génération - Timeout après 90 minutes</span>
+                                </div>
+                                <p style="margin-top: 0.5rem; font-size: 0.875rem;">Vous pouvez réessayer avec un prompt différent.</p>
+                            </div>
+                        `;
+                    } else {
+                        // Affichage normal avec images
+                        contentHTML = `
+                            <div class="history-header">
+                                <h3 class="history-title">${item.prompt}</h3>
+                                <p class="history-date">${new Date(item.timestamp).toLocaleDateString()} à ${new Date(item.timestamp).toLocaleTimeString()}</p>
+                            </div>
+                            <div class="image-grid">
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot status-dalle"></div>
+                                        DALL-E 3
+                                    </div>
+                                    <img src="${item.dalle_url}" alt="DALL-E generation" class="image-preview" onclick="openModal('${item.dalle_url}')">
+                                </div>
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot status-stable"></div>
+                                        Stable Diffusion XL
+                                    </div>
+                                    <img src="${item.stable_url}" alt="Stable Diffusion generation" class="image-preview" onclick="openModal('${item.stable_url}')">
+                                </div>
+                                <div class="image-card">
+                                    <div class="image-label">
+                                        <div class="status-dot status-midjourney"></div>
+                                        Midjourney
+                                    </div>
+                                    <img src="${item.midjourney_url}" alt="Midjourney generation" class="image-preview" onclick="openModal('${item.midjourney_url}')">
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    div.innerHTML = contentHTML;
                     historyContent.appendChild(div);
                 });
             }
