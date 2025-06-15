@@ -630,6 +630,7 @@
         // Configuration
         const N8N_WEBHOOK_URL = "https://danytherrien.app.n8n.cloud/webhook/generate-images";
         const N8N_STATUS_URL = "https://danytherrien.app.n8n.cloud/webhook/status";
+        const N8N_API_BASE = "https://danytherrien.app.n8n.cloud/api/v1";
         
         // State
         let currentUser = null;
@@ -715,8 +716,8 @@
                 mainApp.classList.remove('hidden');
                 loadHistory();
                 
-                // Test de l'API de status
-                testStatusAPI();
+                // Test des APIs disponibles
+                testExecutionsAPI();
                 
             } catch (error) {
                 showError('Erreur de connexion');
@@ -850,81 +851,137 @@
                 const elapsed = Date.now() - startTime;
 
                 try {
-                    // VRAI appel vers votre API de status n8n
-                    const statusResponse = await fetch(`${N8N_STATUS_URL}?id=${generationId}`, {
+                    // NOUVELLE APPROCHE : Consulter directement les exécutions du workflow principal
+                    const executionsResponse = await fetch(`${N8N_API_BASE}/executions?workflowId=Image%20generator%20IA&limit=5`, {
                         method: 'GET',
                         headers: {
                             'Content-Type': 'application/json',
                         }
                     });
 
-                    if (statusResponse.ok) {
-                        const statusData = await statusResponse.json();
-                        console.log('Status reçu:', statusData);
+                    let progressPercentage = Math.min(90, Math.floor((elapsed / maxPollingTime) * 100));
+                    let statusData = null;
 
-                        // Mettre à jour la progression
-                        const progress = statusData.progress || Math.min(95, (elapsed / maxPollingTime) * 100);
-                        updateGenerationProgress(generationId, progress);
+                    if (executionsResponse.ok) {
+                        const executionsData = await executionsResponse.json();
+                        console.log('✅ Exécutions récupérées:', executionsData);
+                        
+                        // Chercher notre exécution par generationId ou timestamp
+                        const ourExecution = executionsData.data?.find(exec => {
+                            const execTime = new Date(exec.startedAt).getTime();
+                            const genTime = parseInt(generationId);
+                            return Math.abs(execTime - genTime) < 120000; // 2 minutes de tolérance
+                        });
 
-                        // Vérifier si c'est terminé
-                        if (statusData.status === 'completed' && statusData.dalle_url) {
-                            console.log('Génération terminée!', statusData);
+                        if (ourExecution) {
+                            console.log('🎯 Exécution trouvée:', ourExecution);
                             
-                            const completedGeneration = {
-                                dalle_url: statusData.dalle_url,
-                                stable_url: statusData.stable_url,
-                                midjourney_url: statusData.midjourney_url,
-                                dalle_status: "success",
-                                stable_status: "success",
-                                midjourney_status: "success",
-                                status: "completed",
-                                progress: 100
-                            };
-
-                            completeGeneration(generationId, completedGeneration);
-                            clearInterval(pollInterval);
-                            return;
+                            if (ourExecution.finished && ourExecution.mode === 'manual') {
+                                // Récupérer les détails de l'exécution
+                                const detailResponse = await fetch(`${N8N_API_BASE}/executions/${ourExecution.id}`);
+                                if (detailResponse.ok) {
+                                    const executionDetail = await detailResponse.json();
+                                    console.log('📋 Détails exécution:', executionDetail);
+                                    
+                                    // Extraire les URLs des images depuis les nœuds
+                                    const nodeData = executionDetail.data?.resultData?.runData;
+                                    if (nodeData) {
+                                        const dalleUrl = nodeData['OpenAI']?.[0]?.data?.main?.[0]?.json?.data?.[0]?.url;
+                                        const stableUrl = nodeData['Stable Diffusion XL1']?.[0]?.data?.main?.[0]?.json?.artifacts?.[0]?.base64;
+                                        const mjUrl = nodeData['Confirmer Réception']?.[0]?.data?.main?.[0]?.json?.url;
+                                        
+                                        if (dalleUrl || stableUrl || mjUrl) {
+                                            console.log('🖼️ Images trouvées!', { dalleUrl, stableUrl, mjUrl });
+                                            
+                                            statusData = {
+                                                status: 'completed',
+                                                progress: 100,
+                                                dalle_url: dalleUrl,
+                                                stable_url: stableUrl ? `data:image/png;base64,${stableUrl}` : null,
+                                                midjourney_url: mjUrl
+                                            };
+                                        }
+                                    }
+                                }
+                            } else if (ourExecution.stoppedAt) {
+                                // Exécution terminée en échec
+                                statusData = { status: 'failed', progress: 0 };
+                            } else {
+                                // Exécution en cours
+                                const execElapsed = Date.now() - new Date(ourExecution.startedAt).getTime();
+                                progressPercentage = Math.min(95, Math.floor((execElapsed / (45 * 60 * 1000)) * 100)); // 45 min estimate
+                                statusData = { status: 'generating', progress: progressPercentage };
+                            }
                         }
                     } else {
-                        console.warn('Erreur status API:', statusResponse.status);
-                        // Continuer le polling même en cas d'erreur API
-                        const fallbackProgress = Math.min(95, (elapsed / maxPollingTime) * 100);
-                        updateGenerationProgress(generationId, fallbackProgress);
+                        console.warn('⚠️ API Executions erreur:', executionsResponse.status);
+                        // Fallback vers l'ancienne API de status
+                        const statusResponse = await fetch(`${N8N_STATUS_URL}?id=${generationId}`);
+                        if (statusResponse.ok) {
+                            statusData = await statusResponse.json();
+                            progressPercentage = parseInt(statusData.progress) || progressPercentage;
+                        }
                     }
+
+                    // Mettre à jour la progression avec une valeur numérique garantie
+                    updateGenerationProgress(generationId, progressPercentage);
+
+                    // Vérifier si c'est terminé
+                    if (statusData && statusData.status === 'completed' && statusData.dalle_url) {
+                        console.log('🎉 Génération terminée!', statusData);
+                        
+                        const completedGeneration = {
+                            dalle_url: statusData.dalle_url,
+                            stable_url: statusData.stable_url || `https://via.placeholder.com/512x512/10b981/white?text=SD-Processed`,
+                            midjourney_url: statusData.midjourney_url || `https://via.placeholder.com/512x512/3b82f6/white?text=MJ-Processed`,
+                            dalle_status: statusData.dalle_url ? "success" : "demo",
+                            stable_status: statusData.stable_url ? "success" : "demo",
+                            midjourney_status: statusData.midjourney_url ? "success" : "demo",
+                            status: "completed",
+                            progress: 100
+                        };
+
+                        completeGeneration(generationId, completedGeneration);
+                        clearInterval(pollInterval);
+                        return;
+                    }
+
+                    if (statusData && statusData.status === 'failed') {
+                        console.warn('❌ Génération échouée');
+                        clearInterval(pollInterval);
+                        failGeneration(generationId);
+                        return;
+                    }
+
                 } catch (error) {
-                    console.error('Erreur polling:', error);
+                    console.error('❌ Erreur polling:', error);
                     // Progression de fallback basée sur le temps
-                    const fallbackProgress = Math.min(95, (elapsed / maxPollingTime) * 100);
+                    const fallbackProgress = Math.min(95, Math.floor((elapsed / maxPollingTime) * 100));
                     updateGenerationProgress(generationId, fallbackProgress);
                 }
 
                 // Timeout après 90 minutes
                 if (elapsed > maxPollingTime) {
-                    console.warn('Timeout génération après 90 minutes');
+                    console.warn('⏰ Timeout génération après 90 minutes');
                     clearInterval(pollInterval);
                     failGeneration(generationId);
                 }
             }, pollingInterval);
 
-            // Premier appel immédiat
+            // Premier appel immédiat après 5 secondes
             setTimeout(async () => {
-                try {
-                    const statusResponse = await fetch(`${N8N_STATUS_URL}?id=${generationId}`);
-                    if (statusResponse.ok) {
-                        const statusData = await statusResponse.json();
-                        console.log('Status initial:', statusData);
-                        updateGenerationProgress(generationId, statusData.progress || 5);
-                    }
-                } catch (error) {
-                    console.error('Erreur status initial:', error);
-                }
-            }, 2000); // Attendre 2 secondes avant le premier check
+                console.log(`🚀 Démarrage du polling pour la génération ${generationId}`);
+                updateGenerationProgress(generationId, 5);
+            }, 5000);
         }
 
         function updateGenerationProgress(generationId, progress) {
             const generation = generationHistory.find(g => g.id === generationId);
             if (generation) {
-                generation.progress = progress;
+                // S'assurer que progress est un nombre valide
+                const validProgress = Math.max(0, Math.min(100, parseInt(progress) || 0));
+                generation.progress = validProgress;
+                console.log(`📊 Progression mise à jour: ${generationId} → ${validProgress}%`);
                 updateHistory();
             }
         }
@@ -951,6 +1008,25 @@
                     generateError.style.borderColor = '';
                     generateError.style.color = '';
                 }, 5000);
+            }
+        }
+
+        // Fonction de test pour vérifier l'API des exécutions
+        async function testExecutionsAPI() {
+            try {
+                const testResponse = await fetch(`${N8N_API_BASE}/executions?limit=1`);
+                if (testResponse.ok) {
+                    const data = await testResponse.json();
+                    console.log('✅ API Executions accessible:', data);
+                    return true;
+                } else {
+                    console.warn('⚠️ API Executions protégée:', testResponse.status);
+                    // Tester l'API de status en fallback
+                    return await testStatusAPI();
+                }
+            } catch (error) {
+                console.error('❌ API Executions inaccessible:', error);
+                return await testStatusAPI();
             }
         }
 
@@ -1030,8 +1106,9 @@
                 div.className = 'history-sidebar-item';
                 div.onclick = () => switchView('history');
                 
+                const progress = parseInt(item.progress) || 0;
                 const statusIndicator = item.status === 'generating' ? 
-                    `<span style="color: #3b82f6;">🔄 ${Math.round(item.progress || 0)}%</span>` : 
+                    `<span style="color: #3b82f6;">🔄 ${progress}%</span>` : 
                     item.status === 'failed' ? 
                     `<span style="color: #ef4444;">❌ Échec</span>` : 
                     `<span style="color: #10b981;">✅ Terminé</span>`;
@@ -1059,7 +1136,7 @@
                     
                     if (item.status === 'generating') {
                         // Affichage avec barre de progression
-                        const progress = item.progress || 0;
+                        const progress = parseInt(item.progress) || 0;
                         const estimatedTime = progress > 0 ? Math.round((100 - progress) * 1.5) : 90; // Estimation en minutes
                         
                         contentHTML = `
@@ -1070,7 +1147,7 @@
                             <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
                                 <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
                                     <span class="spinning">⏳</span>
-                                    <span style="font-weight: 500; color: #0369a1;">Génération en cours... ${Math.round(progress)}%</span>
+                                    <span style="font-weight: 500; color: #0369a1;">Génération en cours... ${progress}%</span>
                                 </div>
                                 <div style="background: #e0f2fe; border-radius: 0.25rem; height: 0.5rem; overflow: hidden;">
                                     <div style="background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; width: ${progress}%; transition: width 0.5s;"></div>
