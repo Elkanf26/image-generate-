@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Historique - Générateur IA</title>
+    <!-- Importer Firebase -->
+    <script type="module" src="firebase-config.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px 12px 45px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-size: 1.2rem;
+        }
+
+        .filter-select {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            background: white;
+            font-size: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+
+        .stats-overview {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+
+        .stat-item h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .stat-item p {
+            opacity: 0.8;
+        }
+
+        .generations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .generation-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .generation-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        }
+
+        .generation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .generation-date {
+            font-size: 0.9rem;
+            color: #666;
+            background: #f8f9fa;
+            padding: 5px 12px;
+            border-radius: 20px;
+        }
+
+        .generation-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .btn-delete {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-share {
+            background: #4ecdc4;
+            color: white;
+        }
+
+        .btn-download {
+            background: #45b7d1;
+            color: white;
+        }
+
+        .action-icon:hover {
+            transform: scale(1.1);
+        }
+
+        .prompt-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
+
+        .images-preview {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .preview-image {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-image:hover {
+            transform: scale(1.05);
+        }
+
+        .preview-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .ai-label {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+        }
+
+        .generation-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .success-rate {
+            color: #28a745;
+            font-weight: 500;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .no-results h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 30px 0;
+        }
+
+        .pagination button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .pagination button:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+        }
+
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            padding: 50px;
+        }
+
+        .error {
+            text-align: center;
+            color: white;
+            padding: 50px;
+        }
+
+        .primary-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                min-width: auto;
+            }
+            
+            .generations-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="index.html" class="back-btn">← Retour</a>
+            <h1>📚 Mon Historique</h1>
+            <p>Toutes vos créations IA en un coup d'œil</p>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loadingState" class="loading">
+            <h2>🔄 Chargement de votre historique...</h2>
+            <p>Veuillez patienter</p>
+        </div>
+
+        <!-- Error state -->
+        <div id="errorState" class="error" style="display: none;">
+            <h2>❌ Erreur</h2>
+            <p id="errorMessage">Une erreur s'est produite</p>
+            <a href="index.html" class="primary-btn" style="margin-top: 20px;">🏠 Retour à l'accueil</a>
+        </div>
+
+        <!-- Main content -->
+        <div id="mainContent" style="display: none;">
+            <div class="controls">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" placeholder="Rechercher dans vos prompts..." id="searchInput">
+                </div>
+                <select class="filter-select" id="filterSelect">
+                    <option value="all">Toutes les générations</option>
+                    <option value="today">Aujourd'hui</option>
+                    <option value="week">Cette semaine</option>
+                    <option value="month">Ce mois</option>
+                    <option value="success">Succès uniquement</option>
+                </select>
+            </div>
+
+            <div class="stats-overview">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <h3 id="totalGenerations">0</h3>
+                        <p>Générations totales</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="totalImages">0</h3>
+                        <p>Images créées</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="successRate">0%</h3>
+                        <p>Taux de réussite</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="favoriteAI">-</h3>
+                        <p>IA préférée</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="generations-grid" id="generationsGrid">
+                <!-- Les générations seront chargées ici -->
+            </div>
+
+            <div class="no-results" id="noResults" style="display: none;">
+                <h3>Aucun résultat trouvé</h3>
+                <p>Essayez de modifier vos critères de recherche</p>
+            </div>
+
+            <div class="pagination" id="pagination">
+                <!-- Pagination dynamique -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour agrandir les images -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        let currentUser = null;
+        let allGenerations = [];
+        let filteredGenerations = [];
+        let currentPage = 1;
+        const itemsPerPage = 6;
+
+        // Attendre que Firebase soit prêt
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Page history.html chargée');
+            
+            // Attendre Firebase
+            await waitForFirebase();
+            
+            // Initialiser l'historique
+            await initializeHistory();
+        });
+
+        async function waitForFirebase() {
+            return new Promise((resolve) => {
+                const checkFirebase = () => {
+                    if (window.firebaseReady && window.loadHistoryFromFirebase) {
+                        console.log('✅ Firebase est prêt');
+                        resolve();
+                    } else {
+                        console.log('⏳ Attente de Firebase...');
+                        setTimeout(checkFirebase, 500);
+                    }
+                };
+                checkFirebase();
+            });
+        }
+
+        async function initializeHistory() {
+            // Demander l'email de l'utilisateur
+            let email = prompt('Entrez votre email pour voir votre historique:');
+            
+            if (!email) {
+                showError('Email requis pour voir l\'historique');
+                return;
+            }
+            
+            // Validation basique de l'email
+            email = email.trim().toLowerCase();
+            if (!email.includes('@')) {
+                showError('Veuillez entrer un email valide');
+                return;
+            }
+            
+            currentUser = email;
+            console.log('👤 Utilisateur:', currentUser);
+            
+            try {
+                await loadUserHistory(email);
+            } catch (error) {
+                console.error('❌ Erreur initialisation:', error);
+                showError('Erreur de chargement de l\'historique: ' + error.message);
+            }
+        }
+
+        async function loadUserHistory(email) {
+            try {
+                console.log('📚 Chargement historique pour:', email);
+                
+                // Charger depuis Firebase
+                const { generations, stats } = await window.loadHistoryFromFirebase(email);
+                
+                console.log('📊 Résultats:', { 
+                    generationsCount: generations.length, 
+                    stats 
+                });
+                
+                allGenerations = generations;
+                filteredGenerations = [...generations];
+                
+                // Afficher les données
+                updateStats(stats);
+                renderGenerations();
+                
+                // Afficher le contenu principal
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                
+                // Configurer les event listeners
+                setupEventListeners();
+                
+                if (generations.length === 0) {
+                    showNoResults('Aucune génération trouvée pour cet email.');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erreur chargement historique:', error);
+                showError('Erreur de chargement des données: ' + error.message);
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalGenerations').textContent = stats.totalGenerations || 0;
+            document.getElementById('totalImages').textContent = stats.totalImages || 0;
+            document.getElementById('successRate').textContent = (stats.successRate || 0) + '%';
+            document.getElementById('favoriteAI').textContent = stats.favoriteAI || '-';
+        }
+
+        function formatDate(timestamp) {
+            let date;
+            
+            // Gérer les différents formats de date
+            if (timestamp && typeof timestamp.toDate === 'function') {
+                // Timestamp Firebase
+                date = timestamp.toDate();
+            } else if (timestamp && typeof timestamp === 'string') {
+                // String ISO
+                date = new Date(timestamp);
+            } else if (timestamp instanceof Date) {
+                // Objet Date
+                date = timestamp;
+            } else {
+                // Par défaut
+                date = new Date();
+            }
+            
+            return date.toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function createGenerationCard(generation) {
+            const successRate = Math.round((generation.success_count / 3) * 100);
+            
+            // Créer la liste des images réussies
+            const successfulImages = [];
+            if (generation.dalle_status === 'success' && generation.dalle_url) {
+                successfulImages.push({ ai: 'DALL-E', url: generation.dalle_url });
+            }
+            if (generation.sd_status === 'success' && generation.sd_url) {
+                successfulImages.push({ ai: 'SD', url: generation.sd_url });
+            }
+            if (generation.mj_status === 'success' && generation.mj_url) {
+                successfulImages.push({ ai: 'MJ', url: generation.mj_url });
+            }
+            
+            // Créer les aperçus d'images
+            let imagesHtml = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < successfulImages.length) {
+                    const img = successfulImages[i];
+                    imagesHtml += `
+                        <div class="preview-image" onclick="openModal('${img.url}')">
+                            <img src="${img.url}" alt="${img.ai} image">
+                            <div class="ai-label">${img.ai}</div>
+                        </div>
+                    `;
+                } else {
+                    imagesHtml += `
+                        <div class="preview-image" style="color: #ccc;">
+                            ❌
+                        </div>
+                    `;
+                }
+            }
+            
+            return `
+                <div class="generation-card">
+                    <div class="generation-header">
+                        <div class="generation-date">${formatDate(generation.created_at)}</div>
+                        <div class="generation-actions">
+                            <button class="action-icon btn-download" onclick="downloadAll('${generation.id}')" title="Télécharger tout">📥</button>
+                            <button class="action-icon btn-share" onclick="shareGeneration('${generation.id}')" title="Partager">🔗</button>
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-text">"${generation.prompt}"</div>
+                    
+                    <div class="images-preview">
+                        ${imagesHtml}
+                    </div>
+                    
+                    <div class="generation-stats">
+                        <span>${generation.total_time || 0}s</span>
+                        <span class="success-rate">${successRate}% réussi</span>
+                        <span>${generation.success_count}/3 images</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderGenerations() {
+            const grid = document.getElementById('generationsGrid');
+            const noResults = document.getElementById('noResults');
+            
+            if (filteredGenerations.length === 0) {
+                if (grid) grid.style.display = 'none';
+                if (noResults) noResults.style.display = 'block';
+                return;
+            }
+            
+            if (grid) grid.style.display = 'grid';
+            if (noResults) noResults.style.display = 'none';
+            
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageItems = filteredGenerations.slice(startIndex, endIndex);
+            
+            if (grid) {
+                grid.innerHTML = pageItems.map(createGenerationCard).join('');
+            }
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const pagination = document.getElementById('pagination');
+            if (!pagination) return;
+            
+            const totalPages = Math.ceil(filteredGenerations.length / itemsPerPage);
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let paginationHTML = '';
+            for (let i = 1; i <= totalPages; i++) {
+                paginationHTML += `
+                    <button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            pagination.innerHTML = paginationHTML;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderGenerations();
+        }
+
+        function filterGenerations() {
+            const searchInput = document.getElementById('searchInput');
+            const filterSelect = document.getElementById('filterSelect');
+            
+            if (!searchInput || !filterSelect) return;
+            
+            const searchTerm = searchInput.value.toLowerCase();
+            const filterValue = filterSelect.value;
+            
+            filteredGenerations = allGenerations.filter(gen => {
+                // Filtrage par recherche
+                const matchesSearch = gen.prompt.toLowerCase().includes(searchTerm);
+                
+                // Filtrage par date/statut
+                let matchesFilter = true;
+                
+                if (gen.created_at) {
+                    const genDate = gen.created_at.toDate ? gen.created_at.toDate() : new Date(gen.created_at);
+                    const now = new Date();
+                    
+                    switch (filterValue) {
+                        case 'today':
+                            matchesFilter = genDate.toDateString() === now.toDateString();
+                            break;
+                        case 'week':
+                            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            matchesFilter = genDate >= weekAgo;
+                            break;
+                        case 'month':
+                            matchesFilter = genDate.getMonth() === now.getMonth() && genDate.getFullYear() === now.getFullYear();
+                            break;
+                        case 'success':
+                            matchesFilter = gen.success_count === 3;
+                            break;
+                    }
+                }
+                
+                return matchesSearch && matchesFilter;
+            });
+            
+            currentPage = 1;
+            renderGenerations();
+        }
+
+        function setupEventListeners() {
+            const searchInput = document.getElementById('searchInput');
+            const filterSelect = document.getElementById('filterSelect');
+            
+            if (searchInput) searchInput.addEventListener('input', filterGenerations);
+            if (filterSelect) filterSelect.addEventListener('change', filterGenerations);
+        }
+
+        // Fonctions d'action
+        function downloadAll(genId) {
+            const generation = allGenerations.find(g => g.id === genId);
+            if (!generation) return;
+            
+            const images = [
+                { name: 'dalle', url: generation.dalle_url, status: generation.dalle_status },
+                { name: 'sd', url: generation.sd_url, status: generation.sd_status },
+                { name: 'mj', url: generation.mj_url, status: generation.mj_status }
+            ];
+            
+            images.forEach(img => {
+                if (img.status === 'success' && img.url) {
+                    const link = document.createElement('a');
+                    link.href = img.url;
+                    link.download = `${img.name}_${genId}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+        }
+
+        function shareGeneration(genId) {
+            const generation = allGenerations.find(g => g.id === genId);
+            if (!generation) return;
+            
+            const url = `${window.location.origin}/results.html?session=${genId}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Mes créations IA',
+                    text: `Regardez ces images que j'ai créées: "${generation.prompt}"`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Lien copié dans le presse-papiers !');
+                });
+            }
+        }
+
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            if (modal && modalImg) {
+                modal.style.display = 'flex';
+                modalImg.src = imageSrc;
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function showError(message) {
+            console.error('💥 Erreur:', message);
+            
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function showNoResults(message) {
+            const noResults = document.getElementById('noResults');
+            if (noResults) {
+                noResults.querySelector('h3').textContent = message;
+                noResults.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
