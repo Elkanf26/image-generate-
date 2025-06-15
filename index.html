@@ -300,7 +300,15 @@
                 });
                 
                 if (response.ok) {
-                    // Succès
+                    const data = await response.json();
+                    
+                    // Si on reçoit une URL de redirection, rediriger
+                    if (data.success && data.redirectUrl) {
+                        window.location.href = data.redirectUrl;
+                        return;
+                    }
+                    
+                    // Sinon afficher le message de succès
                     loading.classList.remove('show');
                     success.classList.add('show');
                     form.reset();
@@ -308,16 +316,12 @@
                     // Réinitialiser le bouton après 5 secondes
                     setTimeout(() => {
                         submitBtn.disabled = false;
-                        submitBtn.textContent = '🚀 Générer les images';
+                        submitBtn.textContent = '🎯 Générer les images';
                         success.classList.remove('show');
                     }, 5000);
                 } else {
                     throw new Error('Erreur serveur');
                 }
-            } catch (err) {
-                // Erreur
-                console.error('Erreur:', err);
-                loading.classList.remove('show');
                 error.classList.add('show');
                 submitBtn.disabled = false;
                 submitBtn.textContent = '🚀 Générer les images';
