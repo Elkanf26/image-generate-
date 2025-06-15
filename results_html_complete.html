@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vos Images IA - Résultats</title>
+    <!-- Importer Firebase -->
+    <script type="module" src="firebase-config.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .prompt-display {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .prompt-text {
+            font-size: 1.2rem;
+            font-style: italic;
+            color: white;
+            text-align: center;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .ai-card {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        }
+
+        .ai-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .ai-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .image-container {
+            position: relative;
+            margin-bottom: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #f8f9fa;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .generated-image {
+            width: 100%;
+            height: auto;
+            max-height: 300px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .generated-image:hover {
+            transform: scale(1.05);
+        }
+
+        .placeholder {
+            color: #6c757d;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        .image-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-download {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-download:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-share {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-share:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .stats-bar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+
+        .stat-item h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        .actions-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+
+        .primary-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            padding: 50px;
+        }
+
+        .error {
+            text-align: center;
+            color: white;
+            padding: 50px;
+        }
+
+        @media (max-width: 768px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .ai-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✨ Vos Images IA Générées</h1>
+            <p>Voici les résultats de votre création</p>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loadingState" class="loading">
+            <h2>🔄 Chargement de vos images...</h2>
+            <p>Veuillez patienter</p>
+        </div>
+
+        <!-- Error state -->
+        <div id="errorState" class="error" style="display: none;">
+            <h2>❌ Erreur de chargement</h2>
+            <p id="errorMessage">Une erreur s'est produite</p>
+            <a href="index.html" class="primary-btn" style="margin-top: 20px;">🏠 Retour à l'accueil</a>
+        </div>
+
+        <!-- Main content -->
+        <div id="mainContent" style="display: none;">
+            <div class="prompt-display">
+                <div class="prompt-text" id="promptText">
+                    "Chargement du prompt..."
+                </div>
+            </div>
+
+            <div class="stats-bar">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <h3 id="successCount">0/3</h3>
+                        <p>Images générées</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="totalTime">0s</h3>
+                        <p>Temps total</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="successRate">0%</h3>
+                        <p>Taux de réussite</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-grid">
+                <!-- DALL-E 3 Card -->
+                <div class="ai-card" data-ai="dalle">
+                    <div class="ai-header">
+                        <div class="ai-name">🎨 DALL-E 3</div>
+                        <div class="status-badge status-error" id="dalleStatus">⏳ Chargement</div>
+                    </div>
+                    <div class="image-container" id="dalleContainer">
+                        <div class="placeholder">Chargement...</div>
+                    </div>
+                    <div class="image-actions" id="dalleActions" style="display: none;">
+                        <button class="action-btn btn-download" onclick="downloadImage('dalle')">
+                            📥 Télécharger
+                        </button>
+                        <button class="action-btn btn-share" onclick="shareImage('dalle')">
+                            🔗 Partager
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stable Diffusion Card -->
+                <div class="ai-card" data-ai="sd">
+                    <div class="ai-header">
+                        <div class="ai-name">🔮 Stable Diffusion</div>
+                        <div class="status-badge status-error" id="sdStatus">⏳ Chargement</div>
+                    </div>
+                    <div class="image-container" id="sdContainer">
+                        <div class="placeholder">Chargement...</div>
+                    </div>
+                    <div class="image-actions" id="sdActions" style="display: none;">
+                        <button class="action-btn btn-download" onclick="downloadImage('sd')">
+                            📥 Télécharger
+                        </button>
+                        <button class="action-btn btn-share" onclick="shareImage('sd')">
+                            🔗 Partager
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Midjourney Card -->
+                <div class="ai-card" data-ai="mj">
+                    <div class="ai-header">
+                        <div class="ai-name">🚀 Midjourney</div>
+                        <div class="status-badge status-error" id="mjStatus">⏳ Chargement</div>
+                    </div>
+                    <div class="image-container" id="mjContainer">
+                        <div class="placeholder">Chargement...</div>
+                    </div>
+                    <div class="image-actions" id="mjActions" style="display: none;">
+                        <button class="action-btn btn-download" onclick="downloadImage('mj')">
+                            📥 Télécharger
+                        </button>
+                        <button class="action-btn btn-share" onclick="shareImage('mj')">
+                            🔗 Partager
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions-panel">
+                <h3 style="margin-bottom: 20px;">Que souhaitez-vous faire maintenant ?</h3>
+                <a href="index.html" class="primary-btn">🎯 Nouvelle Génération</a>
+                <a href="history.html" class="primary-btn">📚 Mon Historique</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal pour agrandir les images -->
+    <div id="imageModal" class="modal" onclick="closeModal()">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <script>
+        let currentData = null;
+
+        // Attendre que Firebase soit prêt
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Page results.html chargée');
+            
+            // Attendre Firebase
+            await waitForFirebase();
+            
+            // Charger les données
+            await loadGenerationData();
+        });
+
+        async function waitForFirebase() {
+            return new Promise((resolve) => {
+                const checkFirebase = () => {
+                    if (window.firebaseReady && window.saveToFirebase) {
+                        console.log('✅ Firebase est prêt');
+                        resolve();
+                    } else {
+                        console.log('⏳ Attente de Firebase...');
+                        setTimeout(checkFirebase, 500);
+                    }
+                };
+                checkFirebase();
+            });
+        }
+
+        async function loadGenerationData() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const sessionId = urlParams.get('session');
+                const dataParam = urlParams.get('data');
+                
+                console.log('📥 Paramètres URL:', { sessionId, hasData: !!dataParam });
+                
+                if (dataParam) {
+                    // Nouvelles données depuis n8n
+                    console.log('🆕 Nouvelles données détectées');
+                    const data = JSON.parse(decodeURIComponent(dataParam));
+                    console.log('📋 Données reçues:', data);
+                    
+                    // Sauvegarder dans Firebase
+                    const savedId = await window.saveToFirebase(data);
+                    
+                    if (savedId) {
+                        console.log('💾 Sauvegardé avec ID:', savedId);
+                        // Nettoyer l'URL
+                        window.history.replaceState({}, document.title, `results.html?session=${savedId}`);
+                    }
+                    
+                    // Afficher les données
+                    displayData(data);
+                    
+                } else if (sessionId) {
+                    // Charger depuis Firebase
+                    console.log('🔍 Chargement depuis Firebase:', sessionId);
+                    const data = await window.loadFromFirebase(sessionId);
+                    
+                    if (data) {
+                        console.log('📄 Données chargées:', data);
+                        displayData(data);
+                    } else {
+                        showError('Génération introuvable');
+                    }
+                } else {
+                    showError('URL invalide - aucun paramètre trouvé');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erreur chargement:', error);
+                showError('Erreur technique: ' + error.message);
+            }
+        }
+
+        function displayData(data) {
+            currentData = data;
+            
+            console.log('🎨 Affichage des données:', data);
+            
+            // Cacher le loading
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            
+            // Mettre à jour le prompt
+            document.getElementById('promptText').textContent = `"${data.prompt}"`;
+            
+            // Mettre à jour les stats
+            const successRate = Math.round((data.success_count / 3) * 100);
+            document.getElementById('successCount').textContent = `${data.success_count}/3`;
+            document.getElementById('totalTime').textContent = `${data.total_time}s`;
+            document.getElementById('successRate').textContent = `${successRate}%`;
+            
+            // Mettre à jour les cartes IA
+            updateAICard('dalle', data.dalle_url, data.dalle_status);
+            updateAICard('sd', data.sd_url, data.sd_status);
+            updateAICard('mj', data.mj_url, data.mj_status);
+        }
+
+        function updateAICard(aiType, url, status) {
+            const container = document.getElementById(aiType + 'Container');
+            const statusElement = document.getElementById(aiType + 'Status');
+            const actions = document.getElementById(aiType + 'Actions');
+            
+            console.log(`🎭 Mise à jour ${aiType}:`, { url, status });
+            
+            if (status === 'success' && url) {
+                // Image réussie
+                container.innerHTML = `<img src="${url}" alt="${aiType} image" class="generated-image" onclick="openModal('${url}')">`;
+                statusElement.textContent = '✅ Succès';
+                statusElement.className = 'status-badge status-success';
+                actions.style.display = 'flex';
+            } else {
+                // Échec
+                container.innerHTML = '<div class="placeholder">❌ Échec de génération</div>';
+                statusElement.textContent = '❌ Échec';
+                statusElement.className = 'status-badge status-error';
+                actions.style.display = 'none';
+            }
+        }
+
+        function showError(message) {
+            console.error('💥 Erreur:', message);
+            
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        // Fonctions d'interaction
+        function downloadImage(aiType) {
+            if (!currentData) return;
+            
+            const urlMap = {
+                'dalle': currentData.dalle_url,
+                'sd': currentData.sd_url,
+                'mj': currentData.mj_url
+            };
+            
+            const url = urlMap[aiType];
+            if (url) {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${aiType}_${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function shareImage(aiType) {
+            if (!currentData) return;
+            
+            const url = window.location.href;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: `Image générée par ${aiType}`,
+                    text: `Regardez cette image créée par IA: "${currentData.prompt}"`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Lien copié dans le presse-papiers !');
+                });
+            }
+        }
+
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modal.style.display = 'flex';
+            modalImg.src = imageSrc;
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
