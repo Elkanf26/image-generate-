@@ -629,6 +629,7 @@
     <script>
         // Configuration
         const N8N_WEBHOOK_URL = "https://danytherrien.app.n8n.cloud/webhook/generate-images";
+        const N8N_STATUS_URL = "https://danytherrien.app.n8n.cloud/webhook/status";
         
         // State
         let currentUser = null;
@@ -713,6 +714,9 @@
                 authPage.classList.add('hidden');
                 mainApp.classList.remove('hidden');
                 loadHistory();
+                
+                // Test de l'API de status
+                testStatusAPI();
                 
             } catch (error) {
                 showError('Erreur de connexion');
@@ -841,46 +845,80 @@
             const maxPollingTime = 90 * 60 * 1000; // 90 minutes max
             const pollingInterval = 30 * 1000; // 30 secondes
             const startTime = Date.now();
-            let progress = 0;
 
             const pollInterval = setInterval(async () => {
                 const elapsed = Date.now() - startTime;
-                progress = Math.min(95, (elapsed / maxPollingTime) * 100);
 
-                // Mettre à jour la barre de progression
-                updateGenerationProgress(generationId, progress);
-
-                // Vérifier les résultats (simulation d'un endpoint de status)
                 try {
-                    // Pour l'instant, simulation - vous pourrez remplacer par un vrai endpoint
-                    const shouldComplete = elapsed > 5 * 60 * 1000; // Compléter après 5 minutes pour demo
-                    
-                    if (shouldComplete) {
-                        // Simuler la récupération des vraies images depuis n8n
-                        const completedGeneration = {
-                            dalle_url: `https://via.placeholder.com/512x512/ef4444/white?text=${encodeURIComponent('DALL-E-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
-                            stable_url: `https://via.placeholder.com/512x512/10b981/white?text=${encodeURIComponent('SD-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
-                            midjourney_url: `https://via.placeholder.com/512x512/3b82f6/white?text=${encodeURIComponent('MJ-REAL: ' + generationHistory.find(g => g.id === generationId)?.prompt.slice(0, 15))}`,
-                            dalle_status: "success",
-                            stable_status: "success",
-                            midjourney_status: "success",
-                            status: "completed",
-                            progress: 100
-                        };
+                    // VRAI appel vers votre API de status n8n
+                    const statusResponse = await fetch(`${N8N_STATUS_URL}?id=${generationId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
 
-                        completeGeneration(generationId, completedGeneration);
-                        clearInterval(pollInterval);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
+                        console.log('Status reçu:', statusData);
+
+                        // Mettre à jour la progression
+                        const progress = statusData.progress || Math.min(95, (elapsed / maxPollingTime) * 100);
+                        updateGenerationProgress(generationId, progress);
+
+                        // Vérifier si c'est terminé
+                        if (statusData.status === 'completed' && statusData.dalle_url) {
+                            console.log('Génération terminée!', statusData);
+                            
+                            const completedGeneration = {
+                                dalle_url: statusData.dalle_url,
+                                stable_url: statusData.stable_url,
+                                midjourney_url: statusData.midjourney_url,
+                                dalle_status: "success",
+                                stable_status: "success",
+                                midjourney_status: "success",
+                                status: "completed",
+                                progress: 100
+                            };
+
+                            completeGeneration(generationId, completedGeneration);
+                            clearInterval(pollInterval);
+                            return;
+                        }
+                    } else {
+                        console.warn('Erreur status API:', statusResponse.status);
+                        // Continuer le polling même en cas d'erreur API
+                        const fallbackProgress = Math.min(95, (elapsed / maxPollingTime) * 100);
+                        updateGenerationProgress(generationId, fallbackProgress);
                     }
                 } catch (error) {
                     console.error('Erreur polling:', error);
+                    // Progression de fallback basée sur le temps
+                    const fallbackProgress = Math.min(95, (elapsed / maxPollingTime) * 100);
+                    updateGenerationProgress(generationId, fallbackProgress);
                 }
 
                 // Timeout après 90 minutes
                 if (elapsed > maxPollingTime) {
+                    console.warn('Timeout génération après 90 minutes');
                     clearInterval(pollInterval);
                     failGeneration(generationId);
                 }
             }, pollingInterval);
+
+            // Premier appel immédiat
+            setTimeout(async () => {
+                try {
+                    const statusResponse = await fetch(`${N8N_STATUS_URL}?id=${generationId}`);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
+                        console.log('Status initial:', statusData);
+                        updateGenerationProgress(generationId, statusData.progress || 5);
+                    }
+                } catch (error) {
+                    console.error('Erreur status initial:', error);
+                }
+            }, 2000); // Attendre 2 secondes avant le premier check
         }
 
         function updateGenerationProgress(generationId, progress) {
@@ -898,8 +936,39 @@
                 updateHistory();
                 
                 // Notification visuelle
-                showGenerateError('✅ Génération terminée ! Vos images sont prêtes.');
-                setTimeout(() => hideGenerateError(), 5000);
+                if (generateError.classList.contains('hidden')) {
+                    generateError.classList.remove('hidden');
+                    generateError.className = generateError.className.replace('error', 'success');
+                    generateError.style.background = '#f0f9ff';
+                    generateError.style.borderColor = '#bae6fd';
+                    generateError.style.color = '#0369a1';
+                }
+                generateError.textContent = '✅ Génération terminée ! Vos images sont prêtes.';
+                setTimeout(() => {
+                    hideGenerateError();
+                    generateError.className = generateError.className.replace('success', 'error');
+                    generateError.style.background = '';
+                    generateError.style.borderColor = '';
+                    generateError.style.color = '';
+                }, 5000);
+            }
+        }
+
+        // Fonction de test pour vérifier l'API de status
+        async function testStatusAPI() {
+            try {
+                const testResponse = await fetch(`${N8N_STATUS_URL}?id=test123`);
+                if (testResponse.ok) {
+                    const data = await testResponse.json();
+                    console.log('✅ API Status fonctionne:', data);
+                    return true;
+                } else {
+                    console.warn('⚠️ API Status erreur:', testResponse.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ API Status inaccessible:', error);
+                return false;
             }
         }
 
