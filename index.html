@@ -302,11 +302,11 @@
                if (response.ok) {
                     const data = await response.json();
                     
-                    // Si on reçoit une URL de redirection, rediriger
-                    if (data.success && data.redirectUrl) {
-                        window.location.href = data.redirectUrl;
-                        return;
-                    }
+                    // Si on reçoit les données, afficher les résultats
+if (data.success) {
+    showResults(data);
+    return;
+}
                     
                     // Sinon afficher le message de succès
                     loading.classList.remove('show');
