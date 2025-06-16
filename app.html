@@ -6,13 +6,30 @@
     <title>AI Image Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Charger votre configuration Firebase existante -->
-    <script src="firebase-config.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div id="app" class="min-h-screen bg-gray-50"></div>
 
     <script>
+        // Configuration Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyCVcwNNPBM7YXZZv2tz2_5BdJUVZZZM8Bk",
+            authDomain: "image-generator-ai-bb1a1.firebaseapp.com",
+            projectId: "image-generator-ai-bb1a1",
+            storageBucket: "image-generator-ai-bb1a1.firebasestorage.app",
+            messagingSenderId: "447983340409",
+            appId: "1:447983340409:web:21d20efb07ee9f17d43da8"
+        };
+
+        // Initialiser Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
         // URL du webhook n8n
         const N8N_WEBHOOK_URL = "https://danytherrien.app.n8n.cloud/webhook/generate-images";
 
