@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Charger votre configuration Firebase existante -->
+    <script src="firebase-config.js"></script>
+</head>
+<body>
+    <div id="app" class="min-h-screen bg-gray-50"></div>
+
+    <script>
+        // URL du webhook n8n
+        const N8N_WEBHOOK_URL = "https://danytherrien.app.n8n.cloud/webhook/generate-images";
+
+        // État global de l'application
+        let currentUser = null;
+        let generatedImages = [];
+        let history = [];
+        let isGenerating = false;
+        let showHistory = false;
+
+        // Fonction pour se connecter avec Google
+        async function signInWithGoogle() {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                console.log('Connecté:', result.user);
+            } catch (error) {
+                console.error('Erreur de connexion:', error);
+                alert('Erreur de connexion: ' + error.message);
+            }
+        }
+
+        // Fonction pour se déconnecter
+        async function signOut() {
+            try {
+                await auth.signOut();
+            } catch (error) {
+                console.error('Erreur de déconnexion:', error);
+            }
+        }
+
+        // Fonction pour générer les images
+        async function generateImages() {
+            const promptInput = document.getElementById('promptInput');
+            const prompt = promptInput.value.trim();
+            
+            if (!prompt || isGenerating) return;
+
+            isGenerating = true;
+            generatedImages = [];
+            renderApp();
+
+            try {
+                console.log('Envoi de la requête à n8n...');
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        userId: currentUser.uid,
+                        userEmail: currentUser.email
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Réponse n8n:', data);
+
+                // Parser la réponse selon différents formats possibles
+                if (data && data.length > 0) {
+                    // Si c'est un tableau direct d'images
+                    generatedImages = data.map(img => ({
+                        url: img.url || img,
+                        model: img.model || 'AI Model'
+                    }));
+                } else if (data.images) {
+                    // Si les images sont dans data.images
+                    generatedImages = data.images;
+                } else if (data.output && data.output.images) {
+                    // Si les images sont dans data.output.images
+                    generatedImages = data.output.images;
+                } else {
+                    console.error('Format de réponse non reconnu:', data);
+                    throw new Error('Format de réponse invalide');
+                }
+
+                // Sauvegarder dans l'historique
+                await saveToHistory(prompt, generatedImages);
+
+            } catch (error) {
+                console.error('Erreur lors de la génération:', error);
+                alert('Erreur lors de la génération des images: ' + error.message);
+            } finally {
+                isGenerating = false;
+                renderApp();
+            }
+        }
+
+        // Sauvegarder dans l'historique Firestore
+        async function saveToHistory(prompt, images) {
+            try {
+                const docRef = await db.collection('history').add({
+                    userId: currentUser.uid,
+                    userEmail: currentUser.email,
+                    prompt: prompt,
+                    images: images,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('Historique sauvegardé:', docRef.id);
+                await loadHistory();
+            } catch (error) {
+                console.error('Erreur sauvegarde historique:', error);
+            }
+        }
+
+        // Charger l'historique depuis Firestore
+        async function loadHistory() {
+            if (!currentUser) return;
+
+            try {
+                const snapshot = await db.collection('history')
+                    .where('userId', '==', currentUser.uid)
+                    .orderBy('timestamp', 'desc')
+                    .limit(20)
+                    .get();
+
+                history = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                renderApp();
+            } catch (error) {
+                console.error('Erreur chargement historique:', error);
+                // Si la collection n'existe pas encore, c'est normal
+                if (error.code === 'failed-precondition') {
+                    history = [];
+                }
+            }
+        }
+
+        // Fonction pour charger un prompt depuis l'historique
+        function loadFromHistory(entry) {
+            document.getElementById('promptInput').value = entry.prompt;
+            generatedImages = entry.images || [];
+            showHistory = false;
+            renderApp();
+        }
+
+        // Écouter les changements d'authentification
+        auth.onAuthStateChanged(async (user) => {
+            currentUser = user;
+            if (user) {
+                await loadHistory();
+            } else {
+                history = [];
+                generatedImages = [];
+            }
+            renderApp();
+        });
+
+        // Fonction pour rendre l'interface
+        function renderApp() {
+            const app = document.getElementById('app');
+
+            if (!currentUser) {
+                // Page de connexion
+                app.innerHTML = `
+                    <div class="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full transform transition-all duration-500 hover:scale-105">
+                            <div class="text-center mb-8">
+                                <div class="w-20 h-20 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i data-lucide="sparkles" class="w-10 h-10 text-white"></i>
+                                </div>
+                                <h1 class="text-3xl font-bold text-gray-800 mb-2">AI Image Generator</h1>
+                                <p class="text-gray-600">Créez des images avec OpenAI et Stable Diffusion</p>
+                            </div>
+                            
+                            <button onclick="signInWithGoogle()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl px-6 py-4 font-semibold flex items-center justify-center gap-3 hover:shadow-lg transform transition-all duration-200 hover:scale-105">
+                                <i data-lucide="log-in" class="w-5 h-5"></i>
+                                Se connecter avec Google
+                            </button>
+                            
+                            <div class="mt-8 grid grid-cols-2 gap-4 text-center">
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div class="text-2xl font-bold text-purple-600">2+</div>
+                                    <div class="text-sm text-gray-600">Modèles d'IA</div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div class="text-2xl font-bold text-pink-600">∞</div>
+                                    <div class="text-sm text-gray-600">Possibilités</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Interface principale
+                app.innerHTML = `
+                    <!-- Header -->
+                    <header class="bg-white shadow-sm border-b sticky top-0 z-30">
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div class="flex justify-between items-center h-16">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+                                        <i data-lucide="sparkles" class="w-6 h-6 text-white"></i>
+                                    </div>
+                                    <h1 class="text-xl font-bold text-gray-800">AI Image Generator</h1>
+                                </div>
+                                
+                                <div class="flex items-center gap-4">
+                                    <button onclick="showHistory = !showHistory; renderApp()" class="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                                        <i data-lucide="clock" class="w-5 h-5"></i>
+                                        <span class="hidden sm:inline">Historique</span>
+                                    </button>
+                                    
+                                    <div class="flex items-center gap-3">
+                                        <img src="${currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.displayName || 'User')}&background=6366f1&color=fff`}" 
+                                             alt="${currentUser.displayName}" 
+                                             class="w-8 h-8 rounded-full">
+                                        <span class="hidden sm:block text-sm font-medium text-gray-700">
+                                            ${currentUser.displayName || currentUser.email}
+                                        </span>
+                                        <button onclick="signOut()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                                            <i data-lucide="log-out" class="w-5 h-5 text-gray-600"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <!-- Main content -->
+                    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <!-- Zone principale -->
+                            <div class="lg:col-span-${showHistory ? '2' : '3'}">
+                                <div class="bg-white rounded-2xl shadow-xl p-8">
+                                    <h2 class="text-2xl font-bold text-gray-800 mb-6">
+                                        Décrivez l'image que vous souhaitez créer
+                                    </h2>
+                                    
+                                    <div class="space-y-4">
+                                        <textarea
+                                            id="promptInput"
+                                            placeholder="Ex: Un astronaute chevauchant un cheval sur Mars, style photoréaliste..."
+                                            class="w-full h-32 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-600 focus:border-transparent resize-none"
+                                            ${isGenerating ? 'disabled' : ''}
+                                        ></textarea>
+                                        
+                                        <div class="flex flex-wrap gap-2 mb-4">
+                                            <span class="text-sm text-gray-500">Suggestions:</span>
+                                            ${['paysage fantastique', 'portrait futuriste', 'art abstrait coloré', 'scène cyberpunk'].map(suggestion => `
+                                                <button
+                                                    onclick="document.getElementById('promptInput').value += (document.getElementById('promptInput').value ? ', ' : '') + '${suggestion}'"
+                                                    class="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                                                    ${isGenerating ? 'disabled' : ''}
+                                                >
+                                                    ${suggestion}
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                        
+                                        <button 
+                                            onclick="generateImages()"
+                                            ${isGenerating ? 'disabled' : ''}
+                                            class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl px-6 py-4 font-semibold flex items-center justify-center gap-3 hover:shadow-lg transform transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                                        >
+                                            ${isGenerating ? `
+                                                <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+                                                Génération en cours...
+                                            ` : `
+                                                <i data-lucide="image" class="w-5 h-5"></i>
+                                                Générer les images
+                                            `}
+                                        </button>
+                                    </div>
+
+                                    ${generatedImages.length > 0 ? `
+                                        <div class="mt-8">
+                                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Images générées</h3>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                ${generatedImages.map((image, index) => `
+                                                    <div class="bg-gray-50 rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow">
+                                                        <img src="${image.url || image}" 
+                                                             alt="Generated ${index + 1}" 
+                                                             class="w-full h-64 object-cover cursor-pointer"
+                                                             onclick="window.open('${image.url || image}', '_blank')">
+                                                        <div class="p-3">
+                                                            <p class="text-sm font-medium text-gray-700">${image.model || 'AI Model'}</p>
+                                                            <button 
+                                                                onclick="window.open('${image.url || image}', '_blank')"
+                                                                class="mt-2 text-xs text-purple-600 hover:text-purple-700"
+                                                            >
+                                                                Voir en grand →
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+
+                            <!-- Historique (sidebar) -->
+                            ${showHistory ? `
+                                <div class="lg:col-span-1">
+                                    <div class="bg-white rounded-2xl shadow-xl p-6 sticky top-24">
+                                        <div class="flex justify-between items-center mb-4">
+                                            <h3 class="text-xl font-bold text-gray-800">Historique</h3>
+                                            <button 
+                                                onclick="showHistory = false; renderApp()"
+                                                class="p-1 hover:bg-gray-100 rounded-lg"
+                                            >
+                                                <i data-lucide="x" class="w-5 h-5"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        ${history.length === 0 ? `
+                                            <div class="text-center py-8 text-gray-500">
+                                                <i data-lucide="clock" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
+                                                <p>Aucune génération</p>
+                                            </div>
+                                        ` : `
+                                            <div class="space-y-4 max-h-[600px] overflow-y-auto">
+                                                ${history.map(entry => `
+                                                    <div class="bg-gray-50 rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                                                         onclick="loadFromHistory(${JSON.stringify(entry).replace(/"/g, '&quot;')})">
+                                                        <p class="font-medium text-gray-800 mb-2 line-clamp-2">${entry.prompt}</p>
+                                                        ${entry.images && entry.images.length > 0 ? `
+                                                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                                                ${entry.images.slice(0, 2).map(img => `
+                                                                    <img src="${img.url || img}" alt="" class="w-full h-20 object-cover rounded">
+                                                                `).join('')}
+                                                            </div>
+                                                        ` : ''}
+                                                        <p class="text-xs text-gray-500">
+                                                            ${entry.timestamp ? new Date(entry.timestamp.toDate ? entry.timestamp.toDate() : entry.timestamp).toLocaleDateString('fr-FR', {
+                                                                day: 'numeric',
+                                                                month: 'short',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            }) : 'Date inconnue'}
+                                                        </p>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        `}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </main>
+                `;
+            }
+
+            // Initialiser les icônes Lucide
+            lucide.createIcons();
+        }
+
+        // Démarrer l'application
+        renderApp();
+    </script>
+</body>
+</html>
